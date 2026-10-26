@@ -11,13 +11,38 @@ import {
   CustomerDetails 
 } from '@/types';
 import { translations } from '@/lib/translations';
-import { RESTAURANT_INFO } from '@/data/mockData';
+import { RESTAURANT_INFO, PRODUCTS as FALLBACK_PRODUCTS } from '@/data/mockData';
+import { supabase } from '@/lib/supabase';
+
+export interface RestaurantData {
+  id: string;
+  slug: string;
+  name: string;
+  tagline: string;
+  phone: string;
+  whatsapp_number: string;
+  address: string;
+  currency: string;
+  delivery_fee: number;
+  min_delivery_amount: number;
+  is_active: boolean;
+}
 
 interface AppContextType {
   language: Language;
   setLanguage: (lang: Language) => void;
   t: typeof translations.fr;
   isRtl: boolean;
+
+  // Multi-Tenant Restaurant Data
+  restaurant: RestaurantData;
+  availableRestaurants: { id: string; slug: string; name: string }[];
+  switchRestaurant: (slug: string) => void;
+  isRestaurantSuspended: boolean;
+
+  // Products from Supabase
+  products: Product[];
+  isLoadingProducts: boolean;
   
   // Consumption Mode
   mode: ConsumptionMode;
@@ -52,18 +77,37 @@ interface AppContextType {
   setIsCheckoutOpen: (open: boolean) => void;
   currentOrder: Order | null;
   setCurrentOrder: (order: Order | null) => void;
-  placeOrder: (customer: CustomerDetails) => Order;
+  placeOrder: (customer: CustomerDetails) => Promise<Order>;
 }
+
+const DEFAULT_RESTAURANT: RestaurantData = {
+  id: 'ded21d9f-ff8f-481b-b37e-b91f89c1ab10',
+  slug: 'gourmet-express',
+  name: RESTAURANT_INFO.name,
+  tagline: 'Cuisine artisanale & Livraison rapide',
+  phone: RESTAURANT_INFO.phone,
+  whatsapp_number: RESTAURANT_INFO.whatsappNumber,
+  address: RESTAURANT_INFO.address,
+  currency: 'DH',
+  delivery_fee: RESTAURANT_INFO.deliveryFee,
+  min_delivery_amount: RESTAURANT_INFO.minDeliveryAmount,
+  is_active: true,
+};
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [language, setLanguageState] = useState<Language>('fr');
+  const [restaurant, setRestaurant] = useState<RestaurantData>(DEFAULT_RESTAURANT);
+  const [availableRestaurants, setAvailableRestaurants] = useState<{ id: string; slug: string; name: string }[]>([]);
+  const [products, setProducts] = useState<Product[]>(FALLBACK_PRODUCTS);
+  const [isLoadingProducts, setIsLoadingProducts] = useState(false);
+
   const [mode, setMode] = useState<ConsumptionMode>('delivery');
   const [deliveryAddress, setDeliveryAddress] = useState<string>('');
   const [deliveryTimeSlot, setDeliveryTimeSlot] = useState<string>('Au plus vite (~25-35 min)');
   const [gpsCoords, setGpsCoords] = useState<{ lat: number; lng: number } | undefined>(undefined);
-  const [isModeModalOpen, setIsModeModalOpen] = useState<boolean>(true); // Open on first load as required
+  const [isModeModalOpen, setIsModeModalOpen] = useState<boolean>(true);
   
   const [cart, setCart] = useState<CartItem[]>([]);
   const [selectedProductForModal, setSelectedProductForModal] = useState<Product | null>(null);
@@ -81,12 +125,90 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  useEffect(() => {
-    if (typeof document !== 'undefined') {
-      document.documentElement.dir = isRtl ? 'rtl' : 'ltr';
-      document.documentElement.lang = language;
+  // Load active restaurant from URL ?r=slug or default
+  const loadRestaurant = async (slugToLoad?: string) => {
+    try {
+      // 1. Fetch available restaurants for switcher
+      const { data: allRestos } = await supabase
+        .from('restaurants')
+        .select('id, slug, name')
+        .order('name');
+
+      if (allRestos && allRestos.length > 0) {
+        setAvailableRestaurants(allRestos);
+      }
+
+      // 2. Fetch specific restaurant data
+      const targetSlug = slugToLoad || 'gourmet-express';
+      const { data: restoData, error } = await supabase
+        .from('restaurants')
+        .select('*')
+        .eq('slug', targetSlug)
+        .single();
+
+      if (error || !restoData) {
+        console.warn("Using fallback restaurant info:", error?.message);
+        return;
+      }
+
+      setRestaurant({
+        id: restoData.id,
+        slug: restoData.slug,
+        name: restoData.name,
+        tagline: restoData.tagline || 'Cuisine & Livraison',
+        phone: restoData.phone || RESTAURANT_INFO.phone,
+        whatsapp_number: restoData.whatsapp_number || RESTAURANT_INFO.whatsappNumber,
+        address: restoData.address || RESTAURANT_INFO.address,
+        currency: restoData.currency || 'DH',
+        delivery_fee: Number(restoData.delivery_fee) || 15,
+        min_delivery_amount: Number(restoData.min_delivery_amount) || 50,
+        is_active: restoData.is_active,
+      });
+
+      // 3. Fetch products of this restaurant
+      setIsLoadingProducts(true);
+      const { data: prodsData } = await supabase
+        .from('products')
+        .select('*')
+        .eq('restaurant_id', restoData.id);
+
+      if (prodsData && prodsData.length > 0) {
+        const formatted: Product[] = prodsData.map(p => ({
+          id: p.id,
+          categoryId: p.category_id || 'burgers',
+          name: { fr: p.name_fr, ar: p.name_ar || p.name_fr },
+          description: { fr: p.description_fr || '', ar: p.description_ar || '' },
+          price: Number(p.price),
+          image: p.image || 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=800&q=80',
+          allergens: p.allergens || [],
+          isAvailable: p.is_available,
+        }));
+        setProducts(formatted);
+      }
+      setIsLoadingProducts(false);
+    } catch (e) {
+      console.error("Error loading restaurant data from Supabase:", e);
+      setIsLoadingProducts(false);
     }
-  }, [language, isRtl]);
+  };
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const slug = params.get('r');
+      loadRestaurant(slug || undefined);
+    }
+  }, []);
+
+  const switchRestaurant = (slug: string) => {
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      url.searchParams.set('r', slug);
+      window.history.pushState({}, '', url.toString());
+    }
+    clearCart();
+    loadRestaurant(slug);
+  };
 
   const addToCart = (
     product: Product,
@@ -98,7 +220,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const unitPrice = product.price + optionsTotal;
     const totalPrice = unitPrice * quantity;
     
-    // Unique ID based on product ID and selected option IDs
     const optionsKey = selectedOptions
       .map(o => o.optionId)
       .sort()
@@ -153,7 +274,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const clearCart = () => setCart([]);
 
   const subtotal = cart.reduce((sum, item) => sum + item.totalPrice, 0);
-  const deliveryFee = mode === 'delivery' && subtotal > 0 ? RESTAURANT_INFO.deliveryFee : 0;
+  const deliveryFee = mode === 'delivery' && subtotal > 0 ? restaurant.delivery_fee : 0;
   const total = subtotal + deliveryFee;
   const totalItemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
@@ -165,7 +286,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setSelectedProductForModal(null);
   };
 
-  const placeOrder = (customer: CustomerDetails): Order => {
+  const placeOrder = async (customer: CustomerDetails): Promise<Order> => {
     const orderNum = `CMD-${Math.floor(1000 + Math.random() * 9000)}`;
     const newOrder: Order = {
       id: 'ord_' + Date.now(),
@@ -183,12 +304,37 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       customer,
     };
     
-    // Broadcast order to shared backend API
+    // 1. Broadcast to in-memory API
     fetch('/api/orders', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(newOrder),
-    }).catch(err => console.error("Could not sync order to API:", err));
+    }).catch(err => console.error(err));
+
+    // 2. Insert into Supabase table orders with tenant restaurant_id
+    try {
+      await supabase.from('orders').insert({
+        restaurant_id: restaurant.id,
+        order_number: orderNum,
+        status: 'new',
+        mode,
+        subtotal,
+        delivery_fee: deliveryFee,
+        total,
+        customer_name: customer.fullName,
+        customer_phone: customer.phone,
+        customer_address: customer.address,
+        customer_landmark: customer.landmark,
+        special_instructions: customer.specialInstructions,
+        delivery_timeslot: customer.deliveryTimeSlot,
+        payment_method: customer.paymentMethod,
+        cash_change_amount: customer.cashChangeAmount,
+        gps_lat: customer.gpsCoords?.lat,
+        gps_lng: customer.gpsCoords?.lng,
+      });
+    } catch (e) {
+      console.warn("Could not push order directly to Supabase:", e);
+    }
 
     setCurrentOrder(newOrder);
     clearCart();
@@ -203,6 +349,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setLanguage,
         t,
         isRtl,
+        restaurant,
+        availableRestaurants,
+        switchRestaurant,
+        isRestaurantSuspended: !restaurant.is_active,
+        products,
+        isLoadingProducts,
         mode,
         setMode,
         deliveryAddress,

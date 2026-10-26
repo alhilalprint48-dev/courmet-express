@@ -16,6 +16,9 @@ export const Header: React.FC = () => {
     language, 
     setLanguage, 
     t, 
+    restaurant,
+    availableRestaurants,
+    switchRestaurant,
     mode, 
     deliveryAddress, 
     deliveryTimeSlot, 
@@ -85,11 +88,28 @@ export const Header: React.FC = () => {
               <Utensils className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
             <div className="min-w-0">
-              <h1 className="font-extrabold text-sm sm:text-lg text-gray-900 tracking-tight leading-none truncate">
-                {t.restaurantName}
-              </h1>
+              {availableRestaurants.length > 1 ? (
+                <div className="flex items-center gap-1">
+                  <select
+                    value={restaurant.slug}
+                    onChange={(e) => switchRestaurant(e.target.value)}
+                    className="font-extrabold text-sm sm:text-base text-gray-900 bg-transparent outline-none cursor-pointer border-b border-dashed border-gray-300 pr-1 max-w-[150px] sm:max-w-[200px] truncate"
+                    title="Changer de restaurant partenaire"
+                  >
+                    {availableRestaurants.map((r) => (
+                      <option key={r.id} value={r.slug}>
+                        {r.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : (
+                <h1 className="font-extrabold text-sm sm:text-lg text-gray-900 tracking-tight leading-none truncate">
+                  {restaurant.name}
+                </h1>
+              )}
               <p className="text-[10px] sm:text-xs text-gray-500 hidden sm:block mt-0.5">
-                {t.tagline}
+                {restaurant.tagline}
               </p>
             </div>
           </div>

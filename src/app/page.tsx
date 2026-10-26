@@ -10,29 +10,32 @@ import { ProductModal } from '@/components/ProductModal';
 import { CheckoutModal } from '@/components/CheckoutModal';
 import { OrderSuccessModal } from '@/components/OrderSuccessModal';
 import { FloatingCartBar } from '@/components/FloatingCartBar';
-import { PRODUCTS, RESTAURANT_INFO } from '@/data/mockData';
+import { RestaurantSuspendedScreen } from '@/components/RestaurantSuspendedScreen';
 import { Search, Flame, ShieldCheck, Clock, Bike } from 'lucide-react';
 
 export default function HomePage() {
-  const { language, t } = useApp();
+  const { language, t, restaurant, isRestaurantSuspended, products, isLoadingProducts } = useApp();
   const [activeCategory, setActiveCategory] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
 
+  // If this restaurant has been suspended by SaaS Super-Admin
+  if (isRestaurantSuspended) {
+    return <RestaurantSuspendedScreen restaurantName={restaurant.name} phone={restaurant.phone} />;
+  }
+
   // Filter products by category and search
-  const filteredProducts = useMemo(() => {
-    return PRODUCTS.filter((product) => {
-      const matchesCategory =
-        activeCategory === 'all' || product.categoryId === activeCategory;
+  const filteredProducts = products.filter((product) => {
+    const matchesCategory =
+      activeCategory === 'all' || product.categoryId === activeCategory;
 
-      const q = searchQuery.toLowerCase().trim();
-      if (!q) return matchesCategory;
+    const q = searchQuery.toLowerCase().trim();
+    if (!q) return matchesCategory;
 
-      const nameMatch = product.name[language].toLowerCase().includes(q);
-      const descMatch = product.description[language].toLowerCase().includes(q);
+    const nameMatch = product.name[language]?.toLowerCase().includes(q);
+    const descMatch = product.description[language]?.toLowerCase().includes(q);
 
-      return matchesCategory && (nameMatch || descMatch);
-    });
-  }, [activeCategory, searchQuery, language]);
+    return matchesCategory && (nameMatch || descMatch);
+  });
 
   return (
     <div className="min-h-screen flex flex-col pb-24 sm:pb-12 bg-slate-50 w-full max-w-full overflow-x-hidden">
