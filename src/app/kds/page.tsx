@@ -372,18 +372,26 @@ export default function KdsPage() {
     }, 150);
   };
 
-  const getStatusBadge = (status: OrderStatus) => {
+  const getStatusBadge = (status: OrderStatus, mode: string = 'delivery') => {
     switch (status) {
       case 'new':
         return <span className="bg-red-500 text-white text-xs font-black px-2.5 py-1 rounded-full animate-pulse">NOUVELLE</span>;
       case 'preparing':
         return <span className="bg-amber-500 text-white text-xs font-black px-2.5 py-1 rounded-full">EN CUISINE</span>;
       case 'ready':
-        return <span className="bg-blue-600 text-white text-xs font-black px-2.5 py-1 rounded-full">PRÊTE</span>;
+        return (
+          <span className="bg-blue-600 text-white text-xs font-black px-2.5 py-1 rounded-full">
+            {mode === 'dine_in' ? 'PRÊTE À SERVIR' : 'PRÊTE'}
+          </span>
+        );
       case 'delivering':
         return <span className="bg-purple-600 text-white text-xs font-black px-2.5 py-1 rounded-full">EN ROUTE</span>;
       case 'delivered':
-        return <span className="bg-emerald-600 text-white text-xs font-black px-2.5 py-1 rounded-full">LIVRÉE & PAYÉE</span>;
+        return (
+          <span className="bg-emerald-600 text-white text-xs font-black px-2.5 py-1 rounded-full">
+            {mode === 'dine_in' ? 'SERVIE & RÉGLÉE' : mode === 'takeaway' ? 'RÉCUPÉRÉE' : 'LIVRÉE & PAYÉE'}
+          </span>
+        );
       default:
         return null;
     }
@@ -526,7 +534,7 @@ export default function KdsPage() {
                 <div>
                   <div className="flex items-center gap-2">
                     <span className="font-mono text-lg font-black text-white">{order.orderNumber}</span>
-                    {getStatusBadge(order.status)}
+                    {getStatusBadge(order.status, order.mode)}
                   </div>
                   <div className="flex items-center gap-2 text-xs text-slate-400 mt-1">
                     <Clock className="w-3.5 h-3.5" />
@@ -631,11 +639,17 @@ export default function KdsPage() {
                     className="flex items-center justify-center gap-1.5 bg-slate-700 hover:bg-slate-600 text-white text-xs font-bold py-2 rounded-xl border border-slate-600 transition-colors"
                   >
                     <Printer className="w-3.5 h-3.5" />
-                    <span>Ticket Livreur</span>
+                    <span>
+                      {order.mode === 'dine_in' 
+                        ? 'Addition Table' 
+                        : order.mode === 'takeaway' 
+                        ? 'Ticket Caisse' 
+                        : 'Ticket Livreur'}
+                    </span>
                   </button>
                 </div>
 
-                {/* Status Advancement Button */}
+                {/* Status Advancement Button tailored per mode */}
                 {order.status === 'new' && (
                   <button
                     onClick={() => updateOrderStatus(order.id, 'preparing')}
@@ -644,23 +658,54 @@ export default function KdsPage() {
                     Accepter & Lancer en Cuisine
                   </button>
                 )}
+
                 {order.status === 'preparing' && (
                   <button
                     onClick={() => updateOrderStatus(order.id, 'ready')}
                     className="w-full bg-blue-600 hover:bg-blue-500 text-white text-xs font-black py-2.5 rounded-xl transition-colors"
                   >
-                    Marquer Prête (Prêt à servir / livrer)
+                    {order.mode === 'dine_in' 
+                      ? `Marquer Prête (À Servir à la ${order.tableNumber || 'Table'})` 
+                      : order.mode === 'takeaway' 
+                      ? 'Marquer Prête (Prêt au Comptoir)' 
+                      : 'Marquer Prête (Prêt pour Livreur)'}
                   </button>
                 )}
-                {order.status === 'ready' && (
+
+                {/* DINE-IN: Direct Table Service (No courier!) */}
+                {order.status === 'ready' && order.mode === 'dine_in' && (
+                  <button
+                    onClick={() => updateOrderStatus(order.id, 'delivered')}
+                    className="w-full bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black py-2.5 rounded-xl transition-colors flex items-center justify-center gap-1.5 shadow-md shadow-emerald-900/30"
+                  >
+                    <CheckCircle className="w-4 h-4" />
+                    <span>Servie à la {order.tableNumber || 'Table'} & Clôturer</span>
+                  </button>
+                )}
+
+                {/* TAKEAWAY: Direct Pickup at Counter (No courier!) */}
+                {order.status === 'ready' && order.mode === 'takeaway' && (
+                  <button
+                    onClick={() => updateOrderStatus(order.id, 'delivered')}
+                    className="w-full bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black py-2.5 rounded-xl transition-colors flex items-center justify-center gap-1.5 shadow-md shadow-emerald-900/30"
+                  >
+                    <CheckCircle className="w-4 h-4" />
+                    <span>Remis au Client (Comptoir) & Clôturer</span>
+                  </button>
+                )}
+
+                {/* DELIVERY ONLY: Assign to Courier */}
+                {order.status === 'ready' && order.mode === 'delivery' && (
                   <button
                     onClick={() => updateOrderStatus(order.id, 'delivering')}
-                    className="w-full bg-purple-600 hover:bg-purple-500 text-white text-xs font-black py-2.5 rounded-xl transition-colors"
+                    className="w-full bg-purple-600 hover:bg-purple-500 text-white text-xs font-black py-2.5 rounded-xl transition-colors flex items-center justify-center gap-1.5 shadow-md shadow-purple-900/30"
                   >
-                    Assigner au Livreur (En cours de route)
+                    <Bike className="w-4 h-4" />
+                    <span>Assigner au Livreur (En cours de route)</span>
                   </button>
                 )}
-                {order.status === 'delivering' && (
+
+                {order.status === 'delivering' && order.mode === 'delivery' && (
                   <button
                     onClick={() => updateOrderStatus(order.id, 'delivered')}
                     className="w-full bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black py-2.5 rounded-xl transition-colors flex items-center justify-center gap-1.5"
@@ -669,9 +714,10 @@ export default function KdsPage() {
                     <span>Valider Paiement & Clôturer</span>
                   </button>
                 )}
+
                 {order.status === 'delivered' && (
                   <div className="text-center text-xs text-emerald-400 font-bold py-1">
-                    ✓ Commande terminée et archivée
+                    ✓ {order.mode === 'dine_in' ? 'Commande servie à table et archivée' : order.mode === 'takeaway' ? 'Commande remise au client et archivée' : 'Commande livrée et archivée'}
                   </div>
                 )}
               </div>
@@ -708,7 +754,9 @@ export default function KdsPage() {
             <h2 className="text-sm font-black">{RESTAURANT_INFO.name.toUpperCase()}</h2>
             <p className="text-[10px]">{RESTAURANT_INFO.address}</p>
             <p className="text-[10px]">Tél: {RESTAURANT_INFO.phone}</p>
-            <p className="font-bold text-base mt-1">*** TICKET {ticketType === 'kitchen' ? 'CUISINE' : 'LIVREUR & CLIENT'} ***</p>
+            <p className="font-bold text-base mt-1">
+              *** TICKET {ticketType === 'kitchen' ? 'CUISINE' : selectedTicketOrder.mode === 'dine_in' ? 'ADDITION TABLE' : selectedTicketOrder.mode === 'takeaway' ? 'CAISSE / COMPTOIR' : 'LIVREUR & CLIENT'} ***
+            </p>
             <p className="font-black text-lg">{selectedTicketOrder.orderNumber}</p>
             <p className="text-[11px]">
               {selectedTicketOrder.createdAt} - {selectedTicketOrder.mode === 'dine_in' ? `SUR PLACE (${selectedTicketOrder.tableNumber || 'À TABLE'})` : selectedTicketOrder.mode === 'delivery' ? 'LIVRAISON' : 'À EMPORTER'}
