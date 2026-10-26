@@ -41,6 +41,12 @@ export const Header: React.FC = () => {
           {/* Top shortcuts: KDS, Livreur, Admin & Lang */}
           <div className="flex items-center gap-1.5 sm:gap-2">
             <a
+              href="/saas"
+              className="hidden lg:flex items-center gap-1 text-[11px] bg-gradient-to-r from-orange-600/40 to-amber-600/40 hover:from-orange-600/60 hover:to-amber-600/60 text-orange-200 px-2.5 py-0.5 rounded-full border border-orange-500/40 transition-colors font-bold"
+            >
+              <span>⭐ Devenir Partenaire SaaS</span>
+            </a>
+            <a
               href="/kds"
               className="hidden md:flex items-center gap-1 text-[11px] bg-slate-800 hover:bg-slate-700 text-slate-200 px-2.5 py-0.5 rounded-full border border-slate-700 transition-colors"
             >
