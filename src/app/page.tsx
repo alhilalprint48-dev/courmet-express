@@ -35,13 +35,13 @@ export default function HomePage() {
   }, [activeCategory, searchQuery, language]);
 
   return (
-    <div className="min-h-screen flex flex-col pb-24 sm:pb-12 bg-slate-50">
+    <div className="min-h-screen flex flex-col pb-24 sm:pb-12 bg-slate-50 w-full max-w-full overflow-x-hidden">
       {/* Universal Header */}
       <Header />
 
       {/* Hero / Promo Banner */}
-      <section className="bg-gradient-to-br from-dark-900 via-dark-800 to-primary-950 text-white px-4 py-6 sm:py-8 shadow-inner">
-        <div className="max-w-5xl mx-auto space-y-4">
+      <section className="bg-gradient-to-br from-dark-900 via-dark-800 to-primary-950 text-white px-3 sm:px-4 py-5 sm:py-8 shadow-inner w-full max-w-full overflow-hidden">
+        <div className="max-w-5xl mx-auto space-y-4 w-full">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
               <div className="inline-flex items-center gap-1.5 bg-primary-600/30 border border-primary-500/40 text-primary-300 px-3 py-1 rounded-full text-xs font-bold mb-2">

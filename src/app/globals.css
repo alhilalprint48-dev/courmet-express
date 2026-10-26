@@ -19,7 +19,11 @@
   --background-rgb: 248, 250, 252;
 }
 
+html,
 body {
+  overflow-x: hidden;
+  width: 100%;
+  max-width: 100vw;
   color: rgb(var(--foreground-rgb));
   background-color: rgb(var(--background-rgb));
   -webkit-font-smoothing: antialiased;

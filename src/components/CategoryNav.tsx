@@ -35,8 +35,8 @@ export const CategoryNav: React.FC<CategoryNavProps> = ({
   };
 
   return (
-    <div className="sticky top-[105px] sm:top-[115px] z-20 bg-white/95 backdrop-blur-md border-b border-gray-100 py-2.5 px-4 shadow-xs">
-      <div className="max-w-5xl mx-auto flex items-center gap-2 overflow-x-auto no-scrollbar scroll-smooth">
+    <div className="sticky top-[88px] sm:top-[115px] z-20 bg-white/95 backdrop-blur-md border-b border-gray-100 py-2 sm:py-2.5 px-3 sm:px-4 shadow-xs w-full max-w-full overflow-hidden">
+      <div className="max-w-5xl mx-auto flex items-center gap-2 overflow-x-auto no-scrollbar scroll-smooth w-full">
         {/* All Items Pill */}
         <button
           onClick={() => onSelectCategory('all')}
