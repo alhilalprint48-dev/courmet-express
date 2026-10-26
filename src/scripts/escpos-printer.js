@@ -50,7 +50,13 @@ function buildEscPosTicket(order, type = 'kitchen') {
   ticket += COMMANDS.TEXT_DOUBLE_HEIGHT;
   ticket += `COMMANDE : ${order.orderNumber}\n`;
   ticket += COMMANDS.TEXT_NORMAL + COMMANDS.TEXT_BOLD_OFF;
-  ticket += `Heure : ${order.createdAt} | Mode : ${order.mode === 'delivery' ? 'LIVRAISON' : 'A EMPORTER'}\n`;
+  const modeLabel = order.mode === 'dine_in' 
+    ? `SUR PLACE (${order.tableNumber || 'TABLE'})` 
+    : order.mode === 'delivery' 
+    ? 'LIVRAISON' 
+    : 'A EMPORTER';
+
+  ticket += `Heure : ${order.createdAt} | Mode : ${modeLabel}\n`;
   ticket += '------------------------------------------\n';
 
   // Coordonnées client
@@ -58,7 +64,12 @@ function buildEscPosTicket(order, type = 'kitchen') {
   ticket += `Client : ${order.customer.fullName}\n`;
   ticket += `Tel    : ${order.customer.phone}\n`;
 
-  if (order.mode === 'delivery') {
+  if (order.mode === 'dine_in') {
+    ticket += `Table  : ${order.tableNumber || 'Service a table'}\n`;
+    if (order.customer.specialInstructions) {
+      ticket += `NOTE CUISINE : ${order.customer.specialInstructions}\n`;
+    }
+  } else if (order.mode === 'delivery') {
     ticket += `Adresse: ${order.customer.address}\n`;
     if (order.customer.landmark) {
       ticket += `Repere : ${order.customer.landmark}\n`;
