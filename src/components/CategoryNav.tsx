@@ -2,14 +2,20 @@
 
 import React from 'react';
 import { useApp } from '@/context/AppContext';
-import { CATEGORIES } from '@/data/mockData';
 import { 
   Beef, 
   Pizza, 
   UtensilsCrossed, 
   CupSoda, 
   Cake, 
-  LayoutGrid 
+  LayoutGrid,
+  Salad,
+  Sandwich,
+  Flame,
+  Coffee,
+  Fish,
+  Soup,
+  Sparkles
 } from 'lucide-react';
 
 interface CategoryNavProps {
@@ -21,7 +27,7 @@ export const CategoryNav: React.FC<CategoryNavProps> = ({
   activeCategory,
   onSelectCategory,
 }) => {
-  const { language, t } = useApp();
+  const { language, t, categories } = useApp();
 
   const getIcon = (iconName: string) => {
     switch (iconName) {
@@ -30,6 +36,13 @@ export const CategoryNav: React.FC<CategoryNavProps> = ({
       case 'UtensilsCrossed': return <UtensilsCrossed className="w-4 h-4" />;
       case 'CupSoda': return <CupSoda className="w-4 h-4" />;
       case 'Cake': return <Cake className="w-4 h-4" />;
+      case 'Salad': return <Salad className="w-4 h-4" />;
+      case 'Sandwich': return <Sandwich className="w-4 h-4" />;
+      case 'Flame': return <Flame className="w-4 h-4" />;
+      case 'Coffee': return <Coffee className="w-4 h-4" />;
+      case 'Fish': return <Fish className="w-4 h-4" />;
+      case 'Soup': return <Soup className="w-4 h-4" />;
+      case 'Sparkles': return <Sparkles className="w-4 h-4" />;
       default: return <UtensilsCrossed className="w-4 h-4" />;
     }
   };
@@ -51,7 +64,7 @@ export const CategoryNav: React.FC<CategoryNavProps> = ({
         </button>
 
         {/* Dynamic Categories */}
-        {CATEGORIES.map((cat) => {
+        {categories.map((cat) => {
           const isActive = activeCategory === cat.id;
           return (
             <button

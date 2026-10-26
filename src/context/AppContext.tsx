@@ -6,12 +6,13 @@ import {
   ConsumptionMode, 
   CartItem, 
   Product, 
+  Category,
   SelectedOptionChoice, 
   Order, 
   CustomerDetails 
 } from '@/types';
 import { translations } from '@/lib/translations';
-import { RESTAURANT_INFO, PRODUCTS as FALLBACK_PRODUCTS } from '@/data/mockData';
+import { RESTAURANT_INFO, PRODUCTS as FALLBACK_PRODUCTS, CATEGORIES as FALLBACK_CATEGORIES } from '@/data/mockData';
 import { supabase } from '@/lib/supabase';
 
 export interface RestaurantData {
@@ -40,7 +41,11 @@ interface AppContextType {
   switchRestaurant: (slug: string) => void;
   isRestaurantSuspended: boolean;
 
-  // Products from Supabase
+  // Categories & Products from Supabase
+  categories: Category[];
+  setCategories: React.Dispatch<React.SetStateAction<Category[]>>;
+  addCategory: (nameFr: string, nameAr: string, iconName?: string) => Promise<Category>;
+  deleteCategory: (categoryId: string) => Promise<void>;
   products: Product[];
   isLoadingProducts: boolean;
   
@@ -105,6 +110,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [restaurant, setRestaurant] = useState<RestaurantData>(DEFAULT_RESTAURANT);
   const [availableRestaurants, setAvailableRestaurants] = useState<{ id: string; slug: string; name: string }[]>([]);
   const [products, setProducts] = useState<Product[]>(FALLBACK_PRODUCTS);
+  const [categories, setCategories] = useState<Category[]>(FALLBACK_CATEGORIES);
   const [isLoadingProducts, setIsLoadingProducts] = useState(false);
 
   const [mode, setMode] = useState<ConsumptionMode>('delivery');
@@ -171,7 +177,25 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         is_active: restoData.is_active,
       });
 
-      // 3. Fetch products of this restaurant
+      // 3. Fetch categories of this restaurant
+      const { data: catsData } = await supabase
+        .from('categories')
+        .select('*')
+        .eq('restaurant_id', restoData.id)
+        .order('sort_order', { ascending: true });
+
+      if (catsData && catsData.length > 0) {
+        const formattedCats: Category[] = catsData.map((c) => ({
+          id: c.id,
+          name: { fr: c.name_fr, ar: c.name_ar || c.name_fr },
+          iconName: c.icon_name || 'UtensilsCrossed',
+        }));
+        setCategories(formattedCats);
+      } else {
+        setCategories(FALLBACK_CATEGORIES);
+      }
+
+      // 4. Fetch products of this restaurant
       setIsLoadingProducts(true);
       const { data: prodsData } = await supabase
         .from('products')
@@ -392,6 +416,43 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return newOrder;
   };
 
+  const addCategory = async (nameFr: string, nameAr: string, iconName: string = 'UtensilsCrossed'): Promise<Category> => {
+    const slugId = nameFr.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-');
+    const newCatObj: Category = {
+      id: slugId || ('cat_' + Date.now()),
+      name: { fr: nameFr, ar: nameAr || nameFr },
+      iconName,
+    };
+
+    try {
+      const { data: inserted } = await supabase.from('categories').insert({
+        restaurant_id: restaurant.id,
+        name_fr: nameFr,
+        name_ar: nameAr || nameFr,
+        icon_name: iconName,
+        sort_order: categories.length + 1,
+      }).select().single();
+
+      if (inserted) {
+        newCatObj.id = inserted.id;
+      }
+    } catch (e) {
+      console.warn("Could not insert category in Supabase:", e);
+    }
+
+    setCategories((prev) => [...prev, newCatObj]);
+    return newCatObj;
+  };
+
+  const deleteCategory = async (categoryId: string) => {
+    setCategories((prev) => prev.filter((c) => c.id !== categoryId));
+    try {
+      await supabase.from('categories').delete().eq('id', categoryId);
+    } catch (e) {
+      console.warn("Could not delete category in Supabase:", e);
+    }
+  };
+
   return (
     <AppContext.Provider
       value={{
@@ -403,6 +464,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         availableRestaurants,
         switchRestaurant,
         isRestaurantSuspended: !restaurant.is_active,
+        categories,
+        setCategories,
+        addCategory,
+        deleteCategory,
         products,
         isLoadingProducts,
         mode,

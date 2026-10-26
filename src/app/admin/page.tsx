@@ -30,16 +30,79 @@ import {
   FileSpreadsheet,
   Receipt,
   PiggyBank,
-  CheckCircle2
+  CheckCircle2,
+  FolderPlus,
+  Folder,
+  Beef,
+  Pizza,
+  UtensilsCrossed,
+  CupSoda,
+  Cake,
+  Salad,
+  Sandwich,
+  Flame,
+  Coffee,
+  Fish,
+  Soup,
+  Sparkles
 } from 'lucide-react';
 import QRCode from 'qrcode';
+import { useApp } from '@/context/AppContext';
 import { PRODUCTS as DEFAULT_PRODUCTS, RESTAURANT_INFO, CATEGORIES } from '@/data/mockData';
 import { Product } from '@/types';
 
 export default function AdminPage() {
+  const { categories, addCategory, deleteCategory } = useApp();
   const [activeTab, setActiveTab] = useState<'catalog' | 'settings' | 'antifraud' | 'qrcodes' | 'analytics'>('catalog');
   const [products, setProducts] = useState<Product[]>(DEFAULT_PRODUCTS);
   const [search, setSearch] = useState('');
+
+  // Category Creation State
+  const [isAddingCategory, setIsAddingCategory] = useState(false);
+  const [newCatNameFr, setNewCatNameFr] = useState('');
+  const [newCatNameAr, setNewCatNameAr] = useState('');
+  const [newCatIcon, setNewCatIcon] = useState('UtensilsCrossed');
+
+  const AVAILABLE_ICONS = [
+    { id: 'UtensilsCrossed', label: 'Couverts' },
+    { id: 'Beef', label: 'Burger / Viande' },
+    { id: 'Pizza', label: 'Pizza' },
+    { id: 'Sandwich', label: 'Sandwich / Tacos' },
+    { id: 'Salad', label: 'Salade' },
+    { id: 'Flame', label: 'Grillades / Épicé' },
+    { id: 'Fish', label: 'Poisson' },
+    { id: 'CupSoda', label: 'Boissons' },
+    { id: 'Coffee', label: 'Café / Chaud' },
+    { id: 'Cake', label: 'Desserts' },
+    { id: 'Sparkles', label: 'Spécialités' },
+  ];
+
+  const getCatIcon = (iconName: string) => {
+    switch (iconName) {
+      case 'Beef': return <Beef className="w-3.5 h-3.5" />;
+      case 'Pizza': return <Pizza className="w-3.5 h-3.5" />;
+      case 'UtensilsCrossed': return <UtensilsCrossed className="w-3.5 h-3.5" />;
+      case 'CupSoda': return <CupSoda className="w-3.5 h-3.5" />;
+      case 'Cake': return <Cake className="w-3.5 h-3.5" />;
+      case 'Salad': return <Salad className="w-3.5 h-3.5" />;
+      case 'Sandwich': return <Sandwich className="w-3.5 h-3.5" />;
+      case 'Flame': return <Flame className="w-3.5 h-3.5" />;
+      case 'Coffee': return <Coffee className="w-3.5 h-3.5" />;
+      case 'Fish': return <Fish className="w-3.5 h-3.5" />;
+      case 'Soup': return <Soup className="w-3.5 h-3.5" />;
+      case 'Sparkles': return <Sparkles className="w-3.5 h-3.5" />;
+      default: return <UtensilsCrossed className="w-3.5 h-3.5" />;
+    }
+  };
+
+  const handleSaveCategory = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCatNameFr.trim()) return;
+    await addCategory(newCatNameFr.trim(), newCatNameAr.trim() || newCatNameFr.trim(), newCatIcon);
+    setNewCatNameFr('');
+    setNewCatNameAr('');
+    setIsAddingCategory(false);
+  };
 
   // QR Code Generation State
   const [qrBaseUrl, setQrBaseUrl] = useState('http://localhost:3000');
@@ -312,13 +375,150 @@ export default function AdminPage() {
                 />
               </div>
 
-              <button
-                onClick={() => setIsAddingProduct(!isAddingProduct)}
-                className="w-full sm:w-auto bg-orange-600 hover:bg-orange-700 text-white font-black px-4 py-2 rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-sm transition-all"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Ajouter un Plat au Menu</span>
-              </button>
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <button
+                  type="button"
+                  onClick={() => setIsAddingCategory(!isAddingCategory)}
+                  className="flex-1 sm:flex-none bg-slate-900 hover:bg-slate-800 text-white font-bold px-3.5 py-2 rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-sm transition-all"
+                >
+                  <FolderPlus className="w-4 h-4 text-orange-400" />
+                  <span>+ Nouvelle Catégorie</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setIsAddingProduct(!isAddingProduct)}
+                  className="flex-1 sm:flex-none bg-orange-600 hover:bg-orange-700 text-white font-black px-4 py-2 rounded-xl text-xs flex items-center justify-center gap-1.5 shadow-sm transition-all"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>+ Ajouter un Plat</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Category Management Bar & Creation Form */}
+            <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Folder className="w-4 h-4 text-orange-600" />
+                  <h3 className="font-extrabold text-xs text-slate-800 uppercase tracking-wider">
+                    Catégories du Menu ({categories.length})
+                  </h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsAddingCategory(!isAddingCategory)}
+                  className="text-xs font-bold text-orange-600 hover:text-orange-700 flex items-center gap-1 hover:underline"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>{isAddingCategory ? 'Fermer le formulaire' : 'Créer une catégorie'}</span>
+                </button>
+              </div>
+
+              {/* Add Category Form */}
+              {isAddingCategory && (
+                <form
+                  onSubmit={handleSaveCategory}
+                  className="bg-orange-50/70 p-4 rounded-2xl border-2 border-orange-200 space-y-3 animate-fade-in"
+                >
+                  <h4 className="font-black text-xs text-orange-950 flex items-center gap-1.5">
+                    <FolderPlus className="w-4 h-4 text-orange-600" />
+                    <span>Créer une nouvelle catégorie de menu</span>
+                  </h4>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                        Nom (Français) *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={newCatNameFr}
+                        onChange={(e) => setNewCatNameFr(e.target.value)}
+                        placeholder="ex: Tacos, Salades, Plats..."
+                        className="w-full p-2 text-xs border rounded-xl bg-white font-medium outline-none focus:ring-2 focus:ring-orange-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                        Nom en Arabe
+                      </label>
+                      <input
+                        type="text"
+                        dir="rtl"
+                        value={newCatNameAr}
+                        onChange={(e) => setNewCatNameAr(e.target.value)}
+                        placeholder="مثال: تاكوس، سلطات..."
+                        className="w-full p-2 text-xs border rounded-xl bg-white font-medium outline-none focus:ring-2 focus:ring-orange-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[11px] font-bold text-slate-700 block mb-1">
+                        Icône représentative
+                      </label>
+                      <select
+                        value={newCatIcon}
+                        onChange={(e) => setNewCatIcon(e.target.value)}
+                        className="w-full p-2 text-xs border rounded-xl bg-white font-bold outline-none focus:ring-2 focus:ring-orange-500"
+                      >
+                        {AVAILABLE_ICONS.map((ic) => (
+                          <option key={ic.id} value={ic.id}>
+                            {ic.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end gap-2 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => setIsAddingCategory(false)}
+                      className="px-3.5 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-200/80 rounded-xl transition-colors"
+                    >
+                      Annuler
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-4 py-1.5 bg-orange-600 hover:bg-orange-700 text-white font-black text-xs rounded-xl shadow-xs transition-colors"
+                    >
+                      Enregistrer la Catégorie
+                    </button>
+                  </div>
+                </form>
+              )}
+
+              {/* Categories Pills Carousel */}
+              <div className="flex flex-wrap gap-2 pt-1">
+                {categories.map((c) => {
+                  const prodCount = products.filter((p) => p.categoryId === c.id).length;
+                  return (
+                    <div
+                      key={c.id}
+                      className="flex items-center gap-2 bg-slate-100 hover:bg-slate-200/80 px-3 py-1.5 rounded-xl border border-slate-200 text-xs transition-colors"
+                    >
+                      <span className="text-orange-600">{getCatIcon(c.iconName)}</span>
+                      <span className="font-bold text-slate-800">{c.name.fr}</span>
+                      <span className="text-[10px] bg-white px-1.5 py-0.5 rounded-md text-slate-500 font-bold border border-slate-200">
+                        {prodCount} plats
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (confirm(`Supprimer la catégorie "${c.name.fr}" ?`)) {
+                            deleteCategory(c.id);
+                          }
+                        }}
+                        className="text-slate-400 hover:text-red-600 ml-1 p-0.5 transition-colors"
+                        title="Supprimer la catégorie"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
 
             {/* Add Product Modal/Form */}
@@ -367,9 +567,9 @@ export default function AdminPage() {
                     <select
                       value={newCategory}
                       onChange={(e) => setNewCategory(e.target.value)}
-                      className="w-full p-2 text-xs border rounded-xl bg-white"
+                      className="w-full p-2 text-xs border rounded-xl bg-white font-bold"
                     >
-                      {CATEGORIES.map((c) => (
+                      {categories.map((c) => (
                         <option key={c.id} value={c.id}>
                           {c.name.fr}
                         </option>
