@@ -99,7 +99,14 @@ export default function SaasLandingPage() {
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5 sm:gap-3">
+            <Link
+              href="/super-admin"
+              className="text-xs font-bold text-purple-400 hover:text-purple-300 transition-colors flex items-center gap-1 border border-purple-500/30 px-2.5 py-1.5 rounded-xl bg-purple-500/10"
+              title="Accès Propriétaire du SaaS"
+            >
+              <span>👑 Super-Admin</span>
+            </Link>
             <Link
               href="/"
               className="text-xs font-bold text-slate-300 hover:text-white transition-colors hidden sm:block"
