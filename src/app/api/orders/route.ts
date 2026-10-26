@@ -28,3 +28,17 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: 'Failed to update order' }, { status: 400 });
   }
 }
+
+export async function DELETE(request: Request) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const orderId = searchParams.get('orderId');
+    if (orderId) {
+      store.orders = store.orders.filter((o) => o.id !== orderId);
+      return NextResponse.json({ success: true });
+    }
+    return NextResponse.json({ error: 'Missing orderId' }, { status: 400 });
+  } catch (error) {
+    return NextResponse.json({ error: 'Failed to delete order' }, { status: 400 });
+  }
+}

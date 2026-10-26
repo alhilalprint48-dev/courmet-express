@@ -17,7 +17,8 @@ import {
   Banknote,
   CreditCard,
   AlertTriangle,
-  UtensilsCrossed
+  UtensilsCrossed,
+  Trash2
 } from 'lucide-react';
 import { Order, OrderStatus } from '@/types';
 import { RESTAURANT_INFO } from '@/data/mockData';
@@ -320,6 +321,49 @@ export default function KdsPage() {
     }
   };
 
+  const deleteOrder = async (orderId: string) => {
+    if (!window.confirm("Voulez-vous vraiment supprimer définitivement cette commande ?")) {
+      return;
+    }
+
+    // Optimistic UI update
+    setOrders((prev) => prev.filter((o) => o.id !== orderId));
+
+    try {
+      // 1. Delete associated order_items first
+      await supabase.from('order_items').delete().eq('order_id', orderId);
+      // 2. Delete order from Supabase
+      await supabase.from('orders').delete().eq('id', orderId);
+      // 3. Delete in local API
+      await fetch(`/api/orders?orderId=${orderId}`, { method: 'DELETE' }).catch(() => {});
+    } catch (err) {
+      console.error("Failed to delete order:", err);
+    }
+  };
+
+  const clearDeliveredOrders = async () => {
+    const delivered = orders.filter((o) => o.status === 'delivered');
+    if (delivered.length === 0) {
+      alert("Aucune commande terminée à nettoyer.");
+      return;
+    }
+    if (!window.confirm(`Supprimer les ${delivered.length} commande(s) terminée(s) / archivée(s) ?`)) {
+      return;
+    }
+
+    setOrders((prev) => prev.filter((o) => o.status !== 'delivered'));
+
+    try {
+      for (const o of delivered) {
+        await supabase.from('order_items').delete().eq('order_id', o.id);
+        await supabase.from('orders').delete().eq('id', o.id);
+        await fetch(`/api/orders?orderId=${o.id}`, { method: 'DELETE' }).catch(() => {});
+      }
+    } catch (err) {
+      console.error("Error clearing delivered orders:", err);
+    }
+  };
+
   const handlePrint = (order: Order, type: 'kitchen' | 'delivery') => {
     setSelectedTicketOrder(order);
     setTicketType(type);
@@ -447,6 +491,15 @@ export default function KdsPage() {
           </button>
 
           <button
+            onClick={clearDeliveredOrders}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-red-950/40 text-slate-400 hover:text-red-300 border border-slate-700 text-xs font-bold transition-colors"
+            title="Supprimer les commandes terminées / archivées"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            <span>Purger terminées</span>
+          </button>
+
+          <button
             onClick={playAlertSound}
             className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-300 border border-slate-700"
           >
@@ -489,12 +542,21 @@ export default function KdsPage() {
                   </div>
                 </div>
 
-                <div className="text-right">
-                  <span className="text-base font-black text-emerald-400 block">{order.total} DH</span>
-                  <span className="text-[10px] text-slate-400 flex items-center justify-end gap-1">
-                    {order.customer.paymentMethod === 'cash' ? <Banknote className="w-3 h-3" /> : <CreditCard className="w-3 h-3" />}
-                    {order.customer.paymentMethod === 'cash' ? 'Espèces' : 'TPE'}
-                  </span>
+                <div className="flex items-center gap-2">
+                  <div className="text-right">
+                    <span className="text-base font-black text-emerald-400 block">{order.total} DH</span>
+                    <span className="text-[10px] text-slate-400 flex items-center justify-end gap-1">
+                      {order.customer.paymentMethod === 'cash' ? <Banknote className="w-3 h-3" /> : <CreditCard className="w-3 h-3" />}
+                      {order.customer.paymentMethod === 'cash' ? 'Espèces' : 'TPE'}
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => deleteOrder(order.id)}
+                    className="p-2 rounded-xl bg-red-500/10 hover:bg-red-500/30 text-red-400 hover:text-red-200 transition-colors ml-1"
+                    title="Supprimer cette commande"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
                 </div>
               </div>
 

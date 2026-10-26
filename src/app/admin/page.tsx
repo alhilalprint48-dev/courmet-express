@@ -132,6 +132,13 @@ export default function AdminPage() {
     );
   };
 
+  // Delete a product from catalog
+  const handleDeleteProduct = (productId: string) => {
+    if (window.confirm("Voulez-vous vraiment supprimer ce produit du catalogue ?")) {
+      setProducts((prev) => prev.filter((p) => p.id !== productId));
+    }
+  };
+
   // Add a new product
   const handleCreateProduct = (e: React.FormEvent) => {
     e.preventDefault();
@@ -545,7 +552,7 @@ export default function AdminPage() {
                       </div>
                     </div>
 
-                    {/* Right: Rupture Immédiate (1 clic) button */}
+                    {/* Right: Rupture Immédiate (1 clic) button & Delete */}
                     <div className="flex items-center gap-2 self-end sm:self-center">
                       <button
                         onClick={() => handleToggleStock(product.id)}
@@ -560,6 +567,14 @@ export default function AdminPage() {
                         <span>
                           {product.isAvailable ? 'En Vente (Cliquer pour Rupture)' : 'EN RUPTURE IMMÉDIATE'}
                         </span>
+                      </button>
+
+                      <button
+                        onClick={() => handleDeleteProduct(product.id)}
+                        className="p-2 rounded-xl text-slate-400 hover:text-red-600 hover:bg-red-50 border border-transparent hover:border-red-200 transition-colors"
+                        title="Supprimer ce produit"
+                      >
+                        <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
                   </div>
