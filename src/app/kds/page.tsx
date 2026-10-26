@@ -16,7 +16,8 @@ import {
   ShoppingBag,
   Banknote,
   CreditCard,
-  AlertTriangle
+  AlertTriangle,
+  UtensilsCrossed
 } from 'lucide-react';
 import { Order, OrderStatus } from '@/types';
 import { RESTAURANT_INFO } from '@/data/mockData';
@@ -351,7 +352,11 @@ export default function KdsPage() {
                     <span>Reçu à {order.createdAt}</span>
                     <span>•</span>
                     <span className="text-orange-400 font-bold uppercase">
-                      {order.mode === 'delivery' ? 'Livraison' : 'À emporter'}
+                      {order.mode === 'dine_in' 
+                        ? `🍽️ ${order.tableNumber || 'À Table'}` 
+                        : order.mode === 'delivery' 
+                        ? 'Livraison' 
+                        : 'À emporter'}
                     </span>
                   </div>
                 </div>
@@ -401,6 +406,12 @@ export default function KdsPage() {
                     <Phone className="w-3.5 h-3.5 text-primary-400" />
                     <span>{order.customer.fullName} ({order.customer.phone})</span>
                   </div>
+                  {order.mode === 'dine_in' && (
+                    <div className="flex items-center gap-1.5 text-amber-300 font-bold bg-amber-950/40 px-2 py-1 rounded border border-amber-800/40">
+                      <UtensilsCrossed className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                      <span>{order.tableNumber || order.customer.address}</span>
+                    </div>
+                  )}
                   {order.mode === 'delivery' && (
                     <div className="flex items-start gap-1.5 text-slate-400">
                       <MapPin className="w-3.5 h-3.5 text-primary-400 shrink-0 mt-0.5" />
@@ -509,12 +520,17 @@ export default function KdsPage() {
             <p className="text-[10px]">Tél: {RESTAURANT_INFO.phone}</p>
             <p className="font-bold text-base mt-1">*** TICKET {ticketType === 'kitchen' ? 'CUISINE' : 'LIVREUR & CLIENT'} ***</p>
             <p className="font-black text-lg">{selectedTicketOrder.orderNumber}</p>
-            <p className="text-[11px]">{selectedTicketOrder.createdAt} - {selectedTicketOrder.mode === 'delivery' ? 'LIVRAISON' : 'À EMPORTER'}</p>
+            <p className="text-[11px]">
+              {selectedTicketOrder.createdAt} - {selectedTicketOrder.mode === 'dine_in' ? `SUR PLACE (${selectedTicketOrder.tableNumber || 'À TABLE'})` : selectedTicketOrder.mode === 'delivery' ? 'LIVRAISON' : 'À EMPORTER'}
+            </p>
           </div>
 
           <div className="border-b border-dashed border-black pb-2 mb-2 space-y-1">
             <p><strong>CLIENT:</strong> {selectedTicketOrder.customer.fullName}</p>
             <p><strong>TÉL:</strong> {selectedTicketOrder.customer.phone}</p>
+            {selectedTicketOrder.mode === 'dine_in' && (
+              <p><strong>TABLE:</strong> {selectedTicketOrder.tableNumber || 'Table'}</p>
+            )}
             {selectedTicketOrder.mode === 'delivery' && (
               <>
                 <p><strong>ADRESSE:</strong> {selectedTicketOrder.customer.address}</p>

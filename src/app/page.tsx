@@ -10,6 +10,7 @@ import { ProductModal } from '@/components/ProductModal';
 import { CheckoutModal } from '@/components/CheckoutModal';
 import { OrderSuccessModal } from '@/components/OrderSuccessModal';
 import { FloatingCartBar } from '@/components/FloatingCartBar';
+import { LiveOrderTracker } from '@/components/LiveOrderTracker';
 import { RestaurantSuspendedScreen } from '@/components/RestaurantSuspendedScreen';
 import { Search, Flame, ShieldCheck, Clock, Bike } from 'lucide-react';
 
@@ -137,6 +138,9 @@ export default function HomePage() {
 
       {/* Mobile Floating Cart Summary */}
       <FloatingCartBar />
+
+      {/* Real-time Order Tracking Drawer */}
+      <LiveOrderTracker />
     </div>
   );
 }

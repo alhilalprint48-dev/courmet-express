@@ -1,6 +1,6 @@
 export type Language = 'fr' | 'ar';
 
-export type ConsumptionMode = 'delivery' | 'takeaway';
+export type ConsumptionMode = 'delivery' | 'takeaway' | 'dine_in';
 
 export type PaymentMethod = 'cash' | 'tpe';
 
@@ -80,6 +80,7 @@ export interface CustomerDetails {
   fullName: string;
   phone: string;
   address: string;
+  tableNumber?: string;
   floorDoor?: string;
   landmark?: string;
   gpsCoords?: {
@@ -107,6 +108,7 @@ export interface Order {
   createdAt: string;
   status: OrderStatus;
   mode: ConsumptionMode;
+  tableNumber?: string;
   items: CartItem[];
   subtotal: number;
   deliveryFee: number;

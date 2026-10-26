@@ -41,20 +41,25 @@ export const OrderSuccessModal: React.FC = () => {
       ? `https://maps.google.com/?q=${currentOrder.customer.gpsCoords.lat},${currentOrder.customer.gpsCoords.lng}`
       : 'Non spécifié';
 
+    const modeText = 
+      currentOrder.mode === 'dine_in'
+        ? `Sur place (${currentOrder.tableNumber || 'À table'})`
+        : currentOrder.mode === 'delivery'
+        ? 'Livraison à Domicile'
+        : 'À emporter';
+
     const text = `🍽️ *NOUVELLE COMMANDE - ${currentOrder.orderNumber}*
 ------------------------------
 👤 *Client:* ${currentOrder.customer.fullName}
 📞 *Tél:* ${currentOrder.customer.phone}
-📍 *Mode:* ${currentOrder.mode === 'delivery' ? 'Livraison à Domicile' : 'À emporter'}
-🏠 *Adresse:* ${currentOrder.customer.address}
-${currentOrder.customer.landmark ? `🏢 *Repère:* ${currentOrder.customer.landmark}\n` : ''}${currentOrder.customer.specialInstructions ? `📝 *Consigne:* ${currentOrder.customer.specialInstructions}\n` : ''}🗺️ *Lien GPS:* ${gpsLink}
-------------------------------
+📍 *Mode:* ${modeText}
+🏠 *Adresse / Table:* ${currentOrder.customer.address}
+${currentOrder.customer.landmark ? `🏢 *Repère:* ${currentOrder.customer.landmark}\n` : ''}${currentOrder.customer.specialInstructions ? `📝 *Consigne cuisine:* ${currentOrder.customer.specialInstructions}\n` : ''}${currentOrder.mode === 'delivery' ? `🗺️ *Lien GPS:* ${gpsLink}\n` : ''}------------------------------
 🛒 *Détail des plats :*
 ${itemsList}
 
 💰 *Sous-total:* ${currentOrder.subtotal} DH
-🛵 *Frais de livraison:* ${currentOrder.deliveryFee} DH
-💳 *TOTAL À RÉGLER:* *${currentOrder.total} DH*
+${currentOrder.deliveryFee > 0 ? `🛵 *Frais de livraison:* ${currentOrder.deliveryFee} DH\n` : ''}💳 *TOTAL À RÉGLER:* *${currentOrder.total} DH*
 💵 *Mode de paiement:* ${paymentText}
 ------------------------------
 Merci de confirmer la prise en charge !`;
@@ -191,10 +196,17 @@ Merci de confirmer la prise en charge !`;
         </div>
 
         {/* Footer */}
-        <div className="p-4 bg-gray-50 border-t border-gray-100">
+        <div className="p-4 bg-gray-50 border-t border-gray-100 space-y-2">
           <button
             onClick={() => setCurrentOrder(null)}
-            className="w-full py-3 rounded-2xl bg-gray-200 hover:bg-gray-300 font-bold text-gray-800 text-xs transition-colors flex items-center justify-center gap-1.5"
+            className="w-full py-3.5 rounded-2xl bg-primary-600 hover:bg-primary-700 text-white font-extrabold text-xs shadow-md shadow-primary-500/20 transition-all flex items-center justify-center gap-2 active:scale-[0.98]"
+          >
+            <Clock className="w-4 h-4" />
+            <span>{language === 'ar' ? 'تتبع إعداد طلبي مباشرة' : 'Suivre la préparation en direct'}</span>
+          </button>
+          <button
+            onClick={() => setCurrentOrder(null)}
+            className="w-full py-2.5 rounded-2xl bg-gray-100 hover:bg-gray-200 font-bold text-gray-700 text-xs transition-colors flex items-center justify-center gap-1.5"
           >
             <ArrowLeft className="w-4 h-4" />
             <span>{t.success.backToMenu}</span>

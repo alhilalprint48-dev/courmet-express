@@ -7,7 +7,8 @@ import {
   MapPin, 
   Clock, 
   Languages, 
-  Utensils 
+  Utensils,
+  UtensilsCrossed
 } from 'lucide-react';
 import { RESTAURANT_INFO } from '@/data/mockData';
 
@@ -20,6 +21,7 @@ export const Header: React.FC = () => {
     availableRestaurants,
     switchRestaurant,
     mode, 
+    tableNumber,
     deliveryAddress, 
     deliveryTimeSlot, 
     setIsModeModalOpen, 
@@ -120,17 +122,19 @@ export const Header: React.FC = () => {
               onClick={() => setIsModeModalOpen(true)}
               className="flex items-center gap-2 px-3 py-1.5 bg-orange-50 border border-orange-200/80 rounded-xl text-xs text-gray-800 hover:bg-orange-100/70 transition-all text-left shadow-xs"
             >
-              {mode === 'delivery' ? (
-                <MapPin className="w-4 h-4 text-primary-600 shrink-0" />
+              {mode === 'dine_in' ? (
+                <UtensilsCrossed className="w-4 h-4 text-orange-600 shrink-0" />
+              ) : mode === 'delivery' ? (
+                <MapPin className="w-4 h-4 text-orange-600 shrink-0" />
               ) : (
-                <Clock className="w-4 h-4 text-primary-600 shrink-0" />
+                <Clock className="w-4 h-4 text-orange-600 shrink-0" />
               )}
               <div className="truncate max-w-[160px]">
                 <span className="font-bold text-primary-700 block text-[11px] leading-tight">
-                  {mode === 'delivery' ? t.modeSelection.delivery : t.modeSelection.takeaway}
+                  {mode === 'dine_in' ? 'Sur place (À table)' : mode === 'delivery' ? t.modeSelection.delivery : t.modeSelection.takeaway}
                 </span>
                 <span className="text-gray-600 truncate block text-[10px]">
-                  {mode === 'delivery' ? (deliveryAddress || t.modeSelection.enterAddress) : deliveryTimeSlot}
+                  {mode === 'dine_in' ? (tableNumber || 'Table') : mode === 'delivery' ? (deliveryAddress || t.modeSelection.enterAddress) : deliveryTimeSlot}
                 </span>
               </div>
               <span className="text-[10px] font-semibold text-primary-600 bg-white px-1.5 py-0.5 rounded border border-orange-200 ml-1">
@@ -165,17 +169,27 @@ export const Header: React.FC = () => {
             className="w-full flex items-center justify-between px-2.5 py-1.5 bg-orange-50/80 border border-orange-200/70 rounded-xl text-left"
           >
             <div className="flex items-center gap-1.5 min-w-0">
-              {mode === 'delivery' ? (
+              {mode === 'dine_in' ? (
+                <UtensilsCrossed className="w-3.5 h-3.5 text-primary-600 shrink-0" />
+              ) : mode === 'delivery' ? (
                 <MapPin className="w-3.5 h-3.5 text-primary-600 shrink-0" />
               ) : (
                 <Clock className="w-3.5 h-3.5 text-primary-600 shrink-0" />
               )}
               <div className="truncate">
                 <span className="font-bold text-primary-700 text-[11px] mr-1">
-                  {mode === 'delivery' ? t.modeSelection.delivery : t.modeSelection.takeaway} :
+                  {mode === 'dine_in'
+                    ? (t.modeSelection.dineIn || 'Sur place')
+                    : mode === 'delivery'
+                    ? t.modeSelection.delivery
+                    : t.modeSelection.takeaway} :
                 </span>
                 <span className="text-gray-600 text-[10px] truncate">
-                  {mode === 'delivery' ? (deliveryAddress || t.modeSelection.enterAddress) : deliveryTimeSlot}
+                  {mode === 'dine_in'
+                    ? (tableNumber ? `${tableNumber}` : (t.modeSelection.enterTable || 'Sélectionner'))
+                    : mode === 'delivery'
+                    ? (deliveryAddress || t.modeSelection.enterAddress)
+                    : deliveryTimeSlot}
                 </span>
               </div>
             </div>

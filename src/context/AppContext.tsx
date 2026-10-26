@@ -47,6 +47,8 @@ interface AppContextType {
   // Consumption Mode
   mode: ConsumptionMode;
   setMode: (mode: ConsumptionMode) => void;
+  tableNumber: string;
+  setTableNumber: (table: string) => void;
   deliveryAddress: string;
   setDeliveryAddress: (address: string) => void;
   deliveryTimeSlot: string;
@@ -77,6 +79,8 @@ interface AppContextType {
   setIsCheckoutOpen: (open: boolean) => void;
   currentOrder: Order | null;
   setCurrentOrder: (order: Order | null) => void;
+  liveTrackingOrder: Order | null;
+  setLiveTrackingOrder: (order: Order | null) => void;
   placeOrder: (customer: CustomerDetails) => Promise<Order>;
 }
 
@@ -104,6 +108,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [isLoadingProducts, setIsLoadingProducts] = useState(false);
 
   const [mode, setMode] = useState<ConsumptionMode>('delivery');
+  const [tableNumber, setTableNumber] = useState<string>('Table 1');
   const [deliveryAddress, setDeliveryAddress] = useState<string>('');
   const [deliveryTimeSlot, setDeliveryTimeSlot] = useState<string>('Au plus vite (~25-35 min)');
   const [gpsCoords, setGpsCoords] = useState<{ lat: number; lng: number } | undefined>(undefined);
@@ -113,6 +118,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [selectedProductForModal, setSelectedProductForModal] = useState<Product | null>(null);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState<boolean>(false);
   const [currentOrder, setCurrentOrder] = useState<Order | null>(null);
+  const [liveTrackingOrder, setLiveTrackingOrder] = useState<Order | null>(null);
 
   const isRtl = language === 'ar';
   const t = translations[language];
@@ -196,9 +202,36 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
       const slug = params.get('r');
+      const tableParam = params.get('table');
+
+      if (tableParam) {
+        setMode('dine_in');
+        setTableNumber(`Table ${tableParam}`);
+        setIsModeModalOpen(false); // Direct access if scanned table QR code
+      }
+
+      try {
+        const saved = localStorage.getItem('resto_live_order');
+        if (saved) {
+          setLiveTrackingOrder(JSON.parse(saved));
+        }
+      } catch (e) {}
+
       loadRestaurant(slug || undefined);
     }
   }, []);
+
+  useEffect(() => {
+    try {
+      if (typeof window !== 'undefined') {
+        if (liveTrackingOrder) {
+          localStorage.setItem('resto_live_order', JSON.stringify(liveTrackingOrder));
+        } else {
+          localStorage.removeItem('resto_live_order');
+        }
+      }
+    } catch (e) {}
+  }, [liveTrackingOrder]);
 
   const switchRestaurant = (slug: string) => {
     if (typeof window !== 'undefined') {
@@ -297,6 +330,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }),
       status: 'new',
       mode,
+      tableNumber: mode === 'dine_in' ? tableNumber : undefined,
       items: [...cart],
       subtotal,
       deliveryFee,
@@ -318,12 +352,13 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         order_number: orderNum,
         status: 'new',
         mode,
+        table_number: mode === 'dine_in' ? tableNumber : null,
         subtotal,
         delivery_fee: deliveryFee,
         total,
         customer_name: customer.fullName,
         customer_phone: customer.phone,
-        customer_address: customer.address,
+        customer_address: mode === 'dine_in' ? `Sur place - ${tableNumber}` : customer.address,
         customer_landmark: customer.landmark,
         special_instructions: customer.specialInstructions,
         delivery_timeslot: customer.deliveryTimeSlot,
@@ -337,6 +372,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
 
     setCurrentOrder(newOrder);
+    setLiveTrackingOrder(newOrder);
     clearCart();
     setIsCheckoutOpen(false);
     return newOrder;
@@ -357,6 +393,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         isLoadingProducts,
         mode,
         setMode,
+        tableNumber,
+        setTableNumber,
         deliveryAddress,
         setDeliveryAddress,
         deliveryTimeSlot,
@@ -381,6 +419,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setIsCheckoutOpen,
         currentOrder,
         setCurrentOrder,
+        liveTrackingOrder,
+        setLiveTrackingOrder,
         placeOrder,
       }}
     >

@@ -17,7 +17,8 @@ import {
   ShoppingBag, 
   Navigation, 
   ShieldCheck,
-  AlertCircle
+  AlertCircle,
+  UtensilsCrossed
 } from 'lucide-react';
 import { PaymentMethod } from '@/types';
 import { RESTAURANT_INFO } from '@/data/mockData';
@@ -33,6 +34,8 @@ export const CheckoutModal: React.FC = () => {
     deliveryFee, 
     total, 
     mode, 
+    tableNumber,
+    setIsModeModalOpen,
     deliveryAddress, 
     setDeliveryAddress, 
     deliveryTimeSlot, 
@@ -181,7 +184,7 @@ export const CheckoutModal: React.FC = () => {
     placeOrder({
       fullName: fullName.trim(),
       phone: cleanedPhone,
-      address: mode === 'delivery' ? address.trim() : RESTAURANT_INFO.address,
+      address: mode === 'delivery' ? address.trim() : mode === 'dine_in' ? `Sur place - ${tableNumber}` : RESTAURANT_INFO.address,
       landmark: landmark.trim() || undefined,
       specialInstructions: instructions.trim() || undefined,
       paymentMethod,
@@ -198,14 +201,24 @@ export const CheckoutModal: React.FC = () => {
         <div className="p-4 sm:p-5 bg-gradient-to-r from-dark-900 to-dark-800 text-white flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <div className="p-2 bg-primary-600 rounded-xl text-white">
-              {mode === 'delivery' ? <Bike className="w-5 h-5" /> : <ShoppingBag className="w-5 h-5" />}
+              {mode === 'dine_in' ? (
+                <UtensilsCrossed className="w-5 h-5" />
+              ) : mode === 'delivery' ? (
+                <Bike className="w-5 h-5" />
+              ) : (
+                <ShoppingBag className="w-5 h-5" />
+              )}
             </div>
             <div>
               <h2 className="text-base sm:text-lg font-black tracking-tight">
                 {t.checkout.title}
               </h2>
               <p className="text-xs text-gray-300">
-                {mode === 'delivery' ? t.modeSelection.delivery : t.modeSelection.takeaway}
+                {mode === 'dine_in'
+                  ? `${t.modeSelection.dineIn || 'Sur place à table'} • ${tableNumber}`
+                  : mode === 'delivery'
+                  ? t.modeSelection.delivery
+                  : t.modeSelection.takeaway}
               </p>
             </div>
           </div>
@@ -383,6 +396,49 @@ export const CheckoutModal: React.FC = () => {
                   )}
                 </div>
               </div>
+
+              {/* Dine-In specific banner */}
+              {mode === 'dine_in' && (
+                <div className="bg-amber-50/90 border border-amber-200/90 p-3.5 rounded-2xl flex items-center justify-between shadow-2xs">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center font-black shadow-xs">
+                      <UtensilsCrossed className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <span className="text-[11px] font-bold text-amber-900 block uppercase tracking-wider">
+                        {language === 'ar' ? 'طلب على الطاولة' : 'Commande à table'}
+                      </span>
+                      <span className="text-sm font-black text-amber-950">
+                        {tableNumber}
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsModeModalOpen(true)}
+                    className="text-xs font-bold text-amber-900 bg-white border border-amber-300 hover:bg-amber-100 px-3 py-1.5 rounded-xl transition-colors shadow-2xs"
+                  >
+                    {language === 'ar' ? 'تغيير' : 'Changer'}
+                  </button>
+                </div>
+              )}
+
+              {/* Special Instructions for Dine-in or Takeaway */}
+              {(mode === 'dine_in' || mode === 'takeaway') && (
+                <div className="space-y-1">
+                  <label className="text-xs font-bold text-gray-700 flex items-center gap-1">
+                    <FileText className="w-3.5 h-3.5 text-primary-600" />
+                    {language === 'ar' ? 'ملاحظة للمطبخ (اختياري)' : 'Remarque pour la cuisine (optionnel)'}
+                  </label>
+                  <input
+                    type="text"
+                    value={instructions}
+                    onChange={(e) => setInstructions(e.target.value)}
+                    placeholder={language === 'ar' ? 'مثال: بدون بصل، صوص جانبي...' : 'Ex: Sans oignons, bien cuit, sauce à part...'}
+                    className="w-full px-3 py-2 rounded-xl border border-gray-200 text-xs focus:ring-2 focus:ring-primary-500 outline-none bg-white"
+                  />
+                </div>
+              )}
 
               {/* Delivery specific fields */}
               {mode === 'delivery' && (
