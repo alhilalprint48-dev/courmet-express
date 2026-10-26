@@ -347,7 +347,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     // 2. Insert into Supabase table orders with tenant restaurant_id
     try {
-      await supabase.from('orders').insert({
+      const { data: insertedOrder, error: orderErr } = await supabase.from('orders').insert({
         restaurant_id: restaurant.id,
         order_number: orderNum,
         status: 'new',
@@ -366,7 +366,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         cash_change_amount: customer.cashChangeAmount,
         gps_lat: customer.gpsCoords?.lat,
         gps_lng: customer.gpsCoords?.lng,
-      });
+      }).select().single();
+
+      if (insertedOrder && cart.length > 0) {
+        const orderItemsToInsert = cart.map(item => ({
+          order_id: insertedOrder.id,
+          product_id: item.product.id || null,
+          product_name_fr: item.product.name.fr,
+          quantity: item.quantity,
+          unit_price: item.unitPrice,
+          total_price: item.totalPrice,
+          selected_options: item.selectedOptions || [],
+          special_instructions: item.specialInstructions || null,
+        }));
+        await supabase.from('order_items').insert(orderItemsToInsert);
+      }
     } catch (e) {
       console.warn("Could not push order directly to Supabase:", e);
     }

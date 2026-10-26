@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { Order, OrderStatus } from '@/types';
 import { RESTAURANT_INFO } from '@/data/mockData';
+import { supabase } from '@/lib/supabase';
 
 // Mock initial live orders for demo
 const INITIAL_ORDERS: Order[] = [
@@ -130,13 +131,117 @@ export default function KdsPage() {
   const [ticketType, setTicketType] = useState<'kitchen' | 'delivery'>('kitchen');
   const previousOrdersCount = React.useRef<number>(0);
 
-  // Fetch orders from shared API
+  // Fetch orders from Supabase (Persistent Database) with fallback to shared API
   const fetchOrders = async () => {
     try {
+      // 1. Fetch from Supabase
+      const { data: supaOrders, error: supaErr } = await supabase
+        .from('orders')
+        .select(`
+          *,
+          order_items (*)
+        `)
+        .order('created_at', { ascending: false })
+        .limit(35);
+
+      if (supaOrders && supaOrders.length > 0) {
+        const mappedOrders: Order[] = supaOrders.map((o) => {
+          const createdAtDate = new Date(o.created_at);
+          const timeStr = createdAtDate.toLocaleTimeString('fr-FR', {
+            hour: '2-digit',
+            minute: '2-digit',
+          });
+
+          const items = (o.order_items || []).map((oi: any) => ({
+            cartItemId: oi.id,
+            product: {
+              id: oi.product_id || oi.id,
+              categoryId: '',
+              name: { fr: oi.product_name_fr, ar: oi.product_name_fr },
+              description: { fr: '', ar: '' },
+              price: Number(oi.unit_price) || 0,
+              image: '',
+              allergens: [],
+              isAvailable: true,
+            },
+            selectedOptions: (oi.selected_options || []).map((so: any) => ({
+              groupId: so.groupId || '',
+              groupName: so.groupName || { fr: '', ar: '' },
+              optionId: so.optionId || '',
+              optionName: so.optionName || { fr: so.optionName?.fr || '', ar: '' },
+              price: Number(so.price) || 0,
+            })),
+            quantity: Number(oi.quantity) || 1,
+            unitPrice: Number(oi.unit_price) || 0,
+            totalPrice: Number(oi.total_price) || 0,
+            specialInstructions: oi.special_instructions,
+          }));
+
+          // Fallback if order_items was not yet populated for older records
+          const finalItems = items.length > 0 ? items : [
+            {
+              cartItemId: o.id + '_gen',
+              product: {
+                id: 'prod_gen',
+                categoryId: '',
+                name: { 
+                  fr: o.mode === 'dine_in' 
+                    ? `Commande Sur Place (${o.table_number || 'À Table'})` 
+                    : `Commande ${o.mode === 'delivery' ? 'Livraison' : 'À emporter'}`, 
+                  ar: '' 
+                },
+                description: { fr: '', ar: '' },
+                price: Number(o.subtotal) || Number(o.total) || 0,
+                image: '',
+                allergens: [],
+                isAvailable: true,
+              },
+              selectedOptions: [],
+              quantity: 1,
+              unitPrice: Number(o.subtotal) || Number(o.total) || 0,
+              totalPrice: Number(o.subtotal) || Number(o.total) || 0,
+              specialInstructions: o.special_instructions,
+            }
+          ];
+
+          return {
+            id: o.id,
+            orderNumber: o.order_number,
+            createdAt: timeStr,
+            status: o.status as OrderStatus,
+            mode: o.mode,
+            tableNumber: o.table_number || (o.mode === 'dine_in' ? 'Table' : undefined),
+            items: finalItems,
+            subtotal: Number(o.subtotal) || 0,
+            deliveryFee: Number(o.delivery_fee) || 0,
+            total: Number(o.total) || 0,
+            customer: {
+              fullName: o.customer_name || 'Client',
+              phone: o.customer_phone || '-',
+              address: o.customer_address || '',
+              landmark: o.customer_landmark,
+              specialInstructions: o.special_instructions,
+              deliveryTimeSlot: o.delivery_timeslot,
+              paymentMethod: o.payment_method || 'cash',
+              cashChangeAmount: o.cash_change_amount,
+              gpsCoords: o.gps_lat ? { lat: Number(o.gps_lat), lng: Number(o.gps_lng) } : undefined,
+            },
+          };
+        });
+
+        // Trigger alert if new orders arrived
+        if (previousOrdersCount.current > 0 && mappedOrders.length > previousOrdersCount.current) {
+          playAlertSound();
+        }
+        previousOrdersCount.current = mappedOrders.length;
+        setOrders(mappedOrders);
+        return;
+      }
+
+      // 2. Fallback to API endpoint if Supabase has 0 orders
       const res = await fetch('/api/orders');
       if (res.ok) {
         const data: Order[] = await res.json();
-        // Trigger alert if new orders arrived
         if (previousOrdersCount.current > 0 && data.length > previousOrdersCount.current) {
           playAlertSound();
         }
@@ -144,14 +249,30 @@ export default function KdsPage() {
         setOrders(data);
       }
     } catch (e) {
-      console.warn("Failed to poll orders:", e);
+      console.warn("Failed to fetch KDS orders:", e);
     }
   };
 
   useEffect(() => {
     fetchOrders();
     const interval = setInterval(fetchOrders, 3000);
-    return () => clearInterval(interval);
+
+    // Supabase Realtime channel subscription for instant live push
+    const channel = supabase
+      .channel('kds-live-orders')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'orders' },
+        () => {
+          fetchOrders();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      clearInterval(interval);
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   // Audio beep generator using Web Audio API (no external asset needed)
@@ -182,6 +303,13 @@ export default function KdsPage() {
     );
 
     try {
+      // 1. Update in Supabase cloud database
+      await supabase
+        .from('orders')
+        .update({ status: nextStatus })
+        .eq('id', orderId);
+
+      // 2. Update local API in-memory
       await fetch('/api/orders', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },

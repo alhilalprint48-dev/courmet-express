@@ -17,6 +17,7 @@ import {
   DollarSign
 } from 'lucide-react';
 import { Order } from '@/types';
+import { supabase } from '@/lib/supabase';
 
 // Mock active deliveries for the courier
 const INITIAL_DELIVERIES: Order[] = [
@@ -124,10 +125,91 @@ export default function DeliveryPage() {
 
   const fetchDeliveries = async () => {
     try {
+      // 1. Fetch live delivery orders from Supabase
+      const { data: supaOrders } = await supabase
+        .from('orders')
+        .select(`*, order_items (*)`)
+        .eq('mode', 'delivery')
+        .in('status', ['new', 'preparing', 'ready', 'delivering'])
+        .order('created_at', { ascending: false });
+
+      if (supaOrders && supaOrders.length > 0) {
+        const formatted: Order[] = supaOrders.map((o) => {
+          const createdAtDate = new Date(o.created_at);
+          const timeStr = createdAtDate.toLocaleTimeString('fr-FR', {
+            hour: '2-digit',
+            minute: '2-digit',
+          });
+
+          const items = (o.order_items || []).map((oi: any) => ({
+            cartItemId: oi.id,
+            product: {
+              id: oi.product_id || oi.id,
+              categoryId: '',
+              name: { fr: oi.product_name_fr, ar: oi.product_name_fr },
+              description: { fr: '', ar: '' },
+              price: Number(oi.unit_price) || 0,
+              image: '',
+              allergens: [],
+              isAvailable: true,
+            },
+            selectedOptions: [],
+            quantity: Number(oi.quantity) || 1,
+            unitPrice: Number(oi.unit_price) || 0,
+            totalPrice: Number(oi.total_price) || 0,
+            specialInstructions: oi.special_instructions,
+          }));
+
+          return {
+            id: o.id,
+            orderNumber: o.order_number,
+            createdAt: timeStr,
+            status: o.status,
+            mode: 'delivery',
+            items: items.length > 0 ? items : [
+              {
+                cartItemId: o.id + '_item',
+                product: {
+                  id: 'p1',
+                  categoryId: '',
+                  name: { fr: 'Commande Livraison', ar: '' },
+                  description: { fr: '', ar: '' },
+                  price: Number(o.subtotal) || 0,
+                  image: '',
+                  allergens: [],
+                  isAvailable: true,
+                },
+                selectedOptions: [],
+                quantity: 1,
+                unitPrice: Number(o.subtotal) || 0,
+                totalPrice: Number(o.subtotal) || 0,
+              }
+            ],
+            subtotal: Number(o.subtotal) || 0,
+            deliveryFee: Number(o.delivery_fee) || 15,
+            total: Number(o.total) || 0,
+            customer: {
+              fullName: o.customer_name || 'Client',
+              phone: o.customer_phone || '-',
+              address: o.customer_address || '',
+              landmark: o.customer_landmark,
+              specialInstructions: o.special_instructions,
+              deliveryTimeSlot: o.delivery_timeslot,
+              paymentMethod: o.payment_method || 'cash',
+              cashChangeAmount: o.cash_change_amount,
+              gpsCoords: o.gps_lat ? { lat: Number(o.gps_lat), lng: Number(o.gps_lng) } : undefined,
+            },
+          };
+        });
+
+        setDeliveries(formatted);
+        return;
+      }
+
+      // 2. Fallback to local memory API
       const res = await fetch('/api/orders');
       if (res.ok) {
         const data: Order[] = await res.json();
-        // Filter only delivery orders
         setDeliveries(data.filter((d) => d.mode === 'delivery'));
       }
     } catch (e) {
@@ -154,6 +236,11 @@ export default function DeliveryPage() {
     );
 
     try {
+      await supabase
+        .from('orders')
+        .update({ status: 'delivered' })
+        .eq('id', orderId);
+
       await fetch('/api/orders', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
