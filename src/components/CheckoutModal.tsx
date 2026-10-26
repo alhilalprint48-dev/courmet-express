@@ -131,46 +131,59 @@ export const CheckoutModal: React.FC = () => {
     e.preventDefault();
     setErrorMessage(null);
 
-    // Validation
-    if (!fullName.trim() || !phone.trim()) {
-      setErrorMessage(t.checkout.errorRequiredFields);
-      return;
-    }
+    const isDineIn = mode === 'dine_in';
+    let finalFullName = fullName.trim();
+    let cleanedPhone = phone.replace(/\s+/g, '');
 
-    if (mode === 'delivery' && !address.trim()) {
-      setErrorMessage(t.checkout.errorRequiredFields);
-      return;
-    }
+    if (isDineIn) {
+      // Pour les clients à table, le nom et le téléphone sont optionnels
+      if (!finalFullName) {
+        finalFullName = language === 'ar' ? `زبون ${tableNumber}` : `Client ${tableNumber}`;
+      }
+      if (!cleanedPhone) {
+        cleanedPhone = '-';
+      }
+    } else {
+      // Obligatoire uniquement pour la livraison et le à emporter
+      if (!finalFullName || !cleanedPhone) {
+        setErrorMessage(t.checkout.errorRequiredFields);
+        return;
+      }
 
-    // Phone simple sanity check (format marocain ou international)
-    const cleanedPhone = phone.replace(/\s+/g, '');
-    if (cleanedPhone.length < 8) {
-      setErrorMessage(
-        language === 'ar'
-          ? 'يرجى إدخال رقم هاتف صحيح مكون من 8 أرقام على الأقل'
-          : 'Veuillez saisir un numéro de téléphone valide.'
-      );
-      return;
-    }
+      if (mode === 'delivery' && !address.trim()) {
+        setErrorMessage(t.checkout.errorRequiredFields);
+        return;
+      }
 
-    // Anti-fraud Blacklist check
-    if (BLACKLISTED_PHONES.includes(cleanedPhone)) {
-      setErrorMessage(
-        language === 'ar'
-          ? 'عذراً، هذا الرقم مسجل في القائمة السوداء للمطعم. يرجى التواصل هاتفياً.'
-          : 'Ce numéro de téléphone est bloqué (Blacklisté). Veuillez contacter le restaurant par téléphone.'
-      );
-      return;
-    }
+      // Phone simple sanity check (format marocain ou international)
+      if (cleanedPhone.length < 8) {
+        setErrorMessage(
+          language === 'ar'
+            ? 'يرجى إدخال رقم هاتف صحيح مكون من 8 أرقام على الأقل'
+            : 'Veuillez saisir un numéro de téléphone valide.'
+        );
+        return;
+      }
 
-    // Anti-fraud COD Limit check
-    if (total > MAX_COD_LIMIT && paymentMethod === 'cash') {
-      setErrorMessage(
-        language === 'ar'
-          ? `المبلغ يتجاوز ${MAX_COD_LIMIT} درهم. يرجى تأكيد الطلب هاتفياً أو تقليص الكمية.`
-          : `Le montant total dépasse le plafond autorisé de ${MAX_COD_LIMIT} DH en paiement à la livraison sans acompte.`
-      );
-      return;
+      // Anti-fraud Blacklist check
+      if (BLACKLISTED_PHONES.includes(cleanedPhone)) {
+        setErrorMessage(
+          language === 'ar'
+            ? 'عذراً، هذا الرقم مسجل في القائمة السوداء للمطعم. يرجى التواصل هاتفياً.'
+            : 'Ce numéro de téléphone est bloqué (Blacklisté). Veuillez contacter le restaurant par téléphone.'
+        );
+        return;
+      }
+
+      // Anti-fraud COD Limit check
+      if (total > MAX_COD_LIMIT && paymentMethod === 'cash') {
+        setErrorMessage(
+          language === 'ar'
+            ? `المبلغ يتجاوز ${MAX_COD_LIMIT} درهم. يرجى تأكيد الطلب هاتفياً أو تقليص الكمية.`
+            : `Le montant total dépasse le plafond autorisé de ${MAX_COD_LIMIT} DH en paiement à la livraison sans acompte.`
+        );
+        return;
+      }
     }
 
     let cashChangeText = undefined;
@@ -182,14 +195,14 @@ export const CheckoutModal: React.FC = () => {
     }
 
     placeOrder({
-      fullName: fullName.trim(),
+      fullName: finalFullName,
       phone: cleanedPhone,
-      address: mode === 'delivery' ? address.trim() : mode === 'dine_in' ? `Sur place - ${tableNumber}` : RESTAURANT_INFO.address,
+      address: isDineIn ? `Sur place - ${tableNumber}` : mode === 'delivery' ? address.trim() : RESTAURANT_INFO.address,
       landmark: landmark.trim() || undefined,
       specialInstructions: instructions.trim() || undefined,
       paymentMethod,
       cashChangeAmount: cashChangeText,
-      gpsCoords,
+      gpsCoords: isDineIn ? undefined : gpsCoords,
       deliveryTimeSlot: mode === 'takeaway' ? deliveryTimeSlot : undefined,
     });
   };
@@ -308,186 +321,252 @@ export const CheckoutModal: React.FC = () => {
           {/* Customer Details Form */}
           {cart.length > 0 && (
             <form onSubmit={handleConfirmOrder} className="space-y-4">
-              <h3 className="font-bold text-xs uppercase tracking-wider text-gray-500">
-                {t.checkout.customerInfo}
-              </h3>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {/* Full Name */}
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-gray-700 flex items-center gap-1">
-                    <User className="w-3.5 h-3.5 text-primary-600" />
-                    {t.checkout.fullName} *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
-                    placeholder="ex: Youssef El Amrani"
-                    className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:ring-2 focus:ring-primary-500 outline-none"
-                  />
-                </div>
-
-                {/* Phone */}
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between">
-                    <label className="text-xs font-bold text-gray-700 flex items-center gap-1">
-                      <Phone className="w-3.5 h-3.5 text-primary-600" />
-                      {t.checkout.phone} *
-                    </label>
-                    {isPhoneVerified && (
-                      <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                        ✓ Numéro Vérifié
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex gap-1.5">
-                    <input
-                      type="tel"
-                      required
-                      value={phone}
-                      onChange={(e) => {
-                        setPhone(e.target.value);
-                        setIsPhoneVerified(false);
-                        setIsOtpSent(false);
-                      }}
-                      placeholder={t.checkout.phonePlaceholder}
-                      className="flex-1 px-3 py-2 rounded-xl border border-gray-200 text-sm focus:ring-2 focus:ring-primary-500 outline-none"
-                    />
-                    {!isPhoneVerified && (
-                      <button
-                        type="button"
-                        onClick={handleSendOtp}
-                        className="px-3 py-1.5 bg-orange-100 hover:bg-orange-200 text-primary-700 rounded-xl text-xs font-bold whitespace-nowrap transition-colors"
-                      >
-                        {isOtpSent ? 'Renvoyer code' : 'Code SMS'}
-                      </button>
-                    )}
-                  </div>
-
-                  {/* OTP Code Input Box */}
-                  {isOtpSent && !isPhoneVerified && (
-                    <div className="bg-orange-50 p-2.5 rounded-xl border border-orange-200 space-y-2 mt-1 animate-fade-in">
-                      <span className="text-[11px] font-semibold text-orange-950 block">
-                        Code à 4 chiffres envoyé par SMS (Tapez <strong>1234</strong> pour tester) :
-                      </span>
-                      <div className="flex gap-2">
-                        <input
-                          type="text"
-                          maxLength={4}
-                          value={otpCode}
-                          onChange={(e) => setOtpCode(e.target.value)}
-                          placeholder="1234"
-                          className="w-24 text-center font-mono font-black text-sm p-1.5 border rounded-lg bg-white"
-                        />
-                        <button
-                          type="button"
-                          onClick={handleVerifyOtp}
-                          className="px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700"
-                        >
-                          Valider
-                        </button>
+              {/* DINE-IN MODE: Zero-Friction 1-Click Ordering */}
+              {mode === 'dine_in' ? (
+                <div className="space-y-3">
+                  {/* Table Identification Banner */}
+                  <div className="bg-amber-50/90 border border-amber-200/90 p-3.5 rounded-2xl flex items-center justify-between shadow-2xs">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center font-black shadow-xs">
+                        <UtensilsCrossed className="w-5 h-5" />
                       </div>
-                      {otpError && (
-                        <p className="text-[10px] font-bold text-red-600">{otpError}</p>
-                      )}
+                      <div>
+                        <span className="text-[11px] font-bold text-amber-900 block uppercase tracking-wider">
+                          {language === 'ar' ? 'طلب مباشر على الطاولة' : 'Commande directe à table'}
+                        </span>
+                        <span className="text-sm font-black text-amber-950">
+                          {tableNumber}
+                        </span>
+                      </div>
                     </div>
-                  )}
-                </div>
-              </div>
+                    <button
+                      type="button"
+                      onClick={() => setIsModeModalOpen(true)}
+                      className="text-xs font-bold text-amber-900 bg-white border border-amber-300 hover:bg-amber-100 px-3 py-1.5 rounded-xl transition-colors shadow-2xs"
+                    >
+                      {language === 'ar' ? 'تغيير الطاولة' : 'Changer de table'}
+                    </button>
+                  </div>
 
-              {/* Dine-In specific banner */}
-              {mode === 'dine_in' && (
-                <div className="bg-amber-50/90 border border-amber-200/90 p-3.5 rounded-2xl flex items-center justify-between shadow-2xs">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center font-black shadow-xs">
-                      <UtensilsCrossed className="w-5 h-5" />
+                  {/* Express Table Notice (No Name/Phone required) */}
+                  <div className="p-3 bg-emerald-50 border border-emerald-200/80 rounded-2xl flex items-start gap-2.5 text-emerald-900 text-xs">
+                    <span className="text-base leading-none mt-0.5">⚡</span>
+                    <div>
+                      <p className="font-bold">
+                        {language === 'ar'
+                          ? 'طلب فوري ومباشر بدون استمارة'
+                          : 'Commande Express sans formulaire'}
+                      </p>
+                      <p className="text-[11px] text-emerald-700 mt-0.5">
+                        {language === 'ar'
+                          ? 'أنت جالس بالفعل على الطاولة! لا داعي لإدخال اسمك أو هاتفك، طلبك يرسل فوراً إلى شاشة المطبخ.'
+                          : 'Vous êtes déjà installé à table. Aucun nom ni téléphone obligatoire : votre commande part immédiatement en cuisine !'}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Optional personalization fields */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+                    <div>
+                      <label className="text-[11px] font-bold text-gray-500 block mb-1">
+                        {language === 'ar' ? 'الاسم أو اللقب (اختياري)' : 'Votre prénom (optionnel)'}
+                      </label>
+                      <input
+                        type="text"
+                        value={fullName}
+                        onChange={(e) => setFullName(e.target.value)}
+                        placeholder={language === 'ar' ? `افتراضي: زبون ${tableNumber}` : `Par défaut: Client ${tableNumber}`}
+                        className="w-full px-3 py-2 rounded-xl border border-gray-200 text-xs focus:ring-2 focus:ring-primary-500 outline-none bg-white"
+                      />
                     </div>
                     <div>
-                      <span className="text-[11px] font-bold text-amber-900 block uppercase tracking-wider">
-                        {language === 'ar' ? 'طلب على الطاولة' : 'Commande à table'}
-                      </span>
-                      <span className="text-sm font-black text-amber-950">
-                        {tableNumber}
-                      </span>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setIsModeModalOpen(true)}
-                    className="text-xs font-bold text-amber-900 bg-white border border-amber-300 hover:bg-amber-100 px-3 py-1.5 rounded-xl transition-colors shadow-2xs"
-                  >
-                    {language === 'ar' ? 'تغيير' : 'Changer'}
-                  </button>
-                </div>
-              )}
-
-              {/* Special Instructions for Dine-in or Takeaway */}
-              {(mode === 'dine_in' || mode === 'takeaway') && (
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-gray-700 flex items-center gap-1">
-                    <FileText className="w-3.5 h-3.5 text-primary-600" />
-                    {language === 'ar' ? 'ملاحظة للمطبخ (اختياري)' : 'Remarque pour la cuisine (optionnel)'}
-                  </label>
-                  <input
-                    type="text"
-                    value={instructions}
-                    onChange={(e) => setInstructions(e.target.value)}
-                    placeholder={language === 'ar' ? 'مثال: بدون بصل، صوص جانبي...' : 'Ex: Sans oignons, bien cuit, sauce à part...'}
-                    className="w-full px-3 py-2 rounded-xl border border-gray-200 text-xs focus:ring-2 focus:ring-primary-500 outline-none bg-white"
-                  />
-                </div>
-              )}
-
-              {/* Delivery specific fields */}
-              {mode === 'delivery' && (
-                <div className="space-y-3 bg-orange-50/50 p-3.5 rounded-2xl border border-orange-100">
-                  <div className="space-y-1">
-                    <div className="flex items-center justify-between">
-                      <label className="text-xs font-bold text-gray-700 flex items-center gap-1">
-                        <MapPin className="w-3.5 h-3.5 text-primary-600" />
-                        {t.checkout.address} *
+                      <label className="text-[11px] font-bold text-gray-500 block mb-1">
+                        {language === 'ar' ? 'رقم الواتساب للتذكرة (اختياري)' : 'WhatsApp pour le reçu (optionnel)'}
                       </label>
-                      <button
-                        type="button"
-                        onClick={handleLocateMe}
-                        className="text-[11px] font-bold text-primary-700 flex items-center gap-1 hover:underline"
-                      >
-                        <Navigation className={`w-3 h-3 ${isLocating ? 'animate-spin' : ''}`} />
-                        {gpsCoords ? '✓ GPS activé' : t.modeSelection.locateMe}
-                      </button>
+                      <input
+                        type="tel"
+                        value={phone}
+                        onChange={(e) => setPhone(e.target.value)}
+                        placeholder="ex: 06 12 34 56 78"
+                        className="w-full px-3 py-2 rounded-xl border border-gray-200 text-xs focus:ring-2 focus:ring-primary-500 outline-none bg-white"
+                      />
                     </div>
-                    <input
-                      type="text"
-                      required
-                      value={address}
-                      onChange={(e) => {
-                        setAddress(e.target.value);
-                        setDeliveryAddress(e.target.value);
-                      }}
-                      placeholder={t.checkout.addressPlaceholder}
-                      className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:ring-2 focus:ring-primary-500 outline-none bg-white"
-                    />
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                    <input
-                      type="text"
-                      value={landmark}
-                      onChange={(e) => setLandmark(e.target.value)}
-                      placeholder={t.checkout.landmark}
-                      className="w-full px-3 py-2 rounded-xl border border-gray-200 text-xs focus:ring-2 focus:ring-primary-500 outline-none bg-white"
-                    />
+                  {/* Special Kitchen Instructions */}
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-gray-700 flex items-center gap-1">
+                      <FileText className="w-3.5 h-3.5 text-primary-600" />
+                      {language === 'ar' ? 'ملاحظة خاصة للمطبخ (اختياري)' : 'Remarque pour la cuisine (optionnel)'}
+                    </label>
                     <input
                       type="text"
                       value={instructions}
                       onChange={(e) => setInstructions(e.target.value)}
-                      placeholder={t.checkout.instructionsPlaceholder}
+                      placeholder={language === 'ar' ? 'مثال: بدون بصل، صوص جانبي، طهي جيد...' : 'Ex: Sans oignons, bien cuit, sauce à part...'}
                       className="w-full px-3 py-2 rounded-xl border border-gray-200 text-xs focus:ring-2 focus:ring-primary-500 outline-none bg-white"
                     />
                   </div>
                 </div>
+              ) : (
+                /* DELIVERY & TAKEAWAY MODES: Customer Details Form */
+                <>
+                  <h3 className="font-bold text-xs uppercase tracking-wider text-gray-500">
+                    {t.checkout.customerInfo}
+                  </h3>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {/* Full Name */}
+                    <div className="space-y-1">
+                      <label className="text-xs font-bold text-gray-700 flex items-center gap-1">
+                        <User className="w-3.5 h-3.5 text-primary-600" />
+                        {t.checkout.fullName} *
+                      </label>
+                      <input
+                        type="text"
+                        required
+                        value={fullName}
+                        onChange={(e) => setFullName(e.target.value)}
+                        placeholder="ex: Youssef El Amrani"
+                        className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:ring-2 focus:ring-primary-500 outline-none"
+                      />
+                    </div>
+
+                    {/* Phone */}
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between">
+                        <label className="text-xs font-bold text-gray-700 flex items-center gap-1">
+                          <Phone className="w-3.5 h-3.5 text-primary-600" />
+                          {t.checkout.phone} *
+                        </label>
+                        {isPhoneVerified && (
+                          <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                            ✓ Numéro Vérifié
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex gap-1.5">
+                        <input
+                          type="tel"
+                          required
+                          value={phone}
+                          onChange={(e) => {
+                            setPhone(e.target.value);
+                            setIsPhoneVerified(false);
+                            setIsOtpSent(false);
+                          }}
+                          placeholder={t.checkout.phonePlaceholder}
+                          className="flex-1 px-3 py-2 rounded-xl border border-gray-200 text-sm focus:ring-2 focus:ring-primary-500 outline-none"
+                        />
+                        {!isPhoneVerified && (
+                          <button
+                            type="button"
+                            onClick={handleSendOtp}
+                            className="px-3 py-1.5 bg-orange-100 hover:bg-orange-200 text-primary-700 rounded-xl text-xs font-bold whitespace-nowrap transition-colors"
+                          >
+                            {isOtpSent ? 'Renvoyer code' : 'Code SMS'}
+                          </button>
+                        )}
+                      </div>
+
+                      {/* OTP Code Input Box */}
+                      {isOtpSent && !isPhoneVerified && (
+                        <div className="bg-orange-50 p-2.5 rounded-xl border border-orange-200 space-y-2 mt-1 animate-fade-in">
+                          <span className="text-[11px] font-semibold text-orange-950 block">
+                            Code à 4 chiffres envoyé par SMS (Tapez <strong>1234</strong> pour tester) :
+                          </span>
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              maxLength={4}
+                              value={otpCode}
+                              onChange={(e) => setOtpCode(e.target.value)}
+                              placeholder="1234"
+                              className="w-24 text-center font-mono font-black text-sm p-1.5 border rounded-lg bg-white"
+                            />
+                            <button
+                              type="button"
+                              onClick={handleVerifyOtp}
+                              className="px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700"
+                            >
+                              Valider
+                            </button>
+                          </div>
+                          {otpError && (
+                            <p className="text-[10px] font-bold text-red-600">{otpError}</p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Special Instructions for Takeaway */}
+                  {mode === 'takeaway' && (
+                    <div className="space-y-1">
+                      <label className="text-xs font-bold text-gray-700 flex items-center gap-1">
+                        <FileText className="w-3.5 h-3.5 text-primary-600" />
+                        {language === 'ar' ? 'ملاحظة للمطبخ (اختياري)' : 'Remarque pour la cuisine (optionnel)'}
+                      </label>
+                      <input
+                        type="text"
+                        value={instructions}
+                        onChange={(e) => setInstructions(e.target.value)}
+                        placeholder={language === 'ar' ? 'مثال: بدون بصل، صوص جانبي...' : 'Ex: Sans oignons, bien cuit, sauce à part...'}
+                        className="w-full px-3 py-2 rounded-xl border border-gray-200 text-xs focus:ring-2 focus:ring-primary-500 outline-none bg-white"
+                      />
+                    </div>
+                  )}
+
+                  {/* Delivery specific fields */}
+                  {mode === 'delivery' && (
+                    <div className="space-y-3 bg-orange-50/50 p-3.5 rounded-2xl border border-orange-100">
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between">
+                          <label className="text-xs font-bold text-gray-700 flex items-center gap-1">
+                            <MapPin className="w-3.5 h-3.5 text-primary-600" />
+                            {t.checkout.address} *
+                          </label>
+                          <button
+                            type="button"
+                            onClick={handleLocateMe}
+                            className="text-[11px] font-bold text-primary-700 flex items-center gap-1 hover:underline"
+                          >
+                            <Navigation className={`w-3 h-3 ${isLocating ? 'animate-spin' : ''}`} />
+                            {gpsCoords ? '✓ GPS activé' : t.modeSelection.locateMe}
+                          </button>
+                        </div>
+                        <input
+                          type="text"
+                          required
+                          value={address}
+                          onChange={(e) => {
+                            setAddress(e.target.value);
+                            setDeliveryAddress(e.target.value);
+                          }}
+                          placeholder={t.checkout.addressPlaceholder}
+                          className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm focus:ring-2 focus:ring-primary-500 outline-none bg-white"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        <input
+                          type="text"
+                          value={landmark}
+                          onChange={(e) => setLandmark(e.target.value)}
+                          placeholder={t.checkout.landmark}
+                          className="w-full px-3 py-2 rounded-xl border border-gray-200 text-xs focus:ring-2 focus:ring-primary-500 outline-none bg-white"
+                        />
+                        <input
+                          type="text"
+                          value={instructions}
+                          onChange={(e) => setInstructions(e.target.value)}
+                          placeholder={t.checkout.instructionsPlaceholder}
+                          className="w-full px-3 py-2 rounded-xl border border-gray-200 text-xs focus:ring-2 focus:ring-primary-500 outline-none bg-white"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
 
               {/* Payment Method Selector (Default: Pay on Delivery) */}
@@ -516,7 +595,11 @@ export const CheckoutModal: React.FC = () => {
                     <Banknote className="w-5 h-5 text-primary-600 shrink-0" />
                     <div>
                       <span className="text-xs font-bold block">{t.checkout.cash}</span>
-                      <span className="text-[10px] text-gray-500 block leading-tight">À la réception</span>
+                      <span className="text-[10px] text-gray-500 block leading-tight">
+                        {mode === 'dine_in' 
+                          ? (language === 'ar' ? 'نقداً للنادل' : 'Au serveur à table')
+                          : 'À la réception'}
+                      </span>
                     </div>
                   </button>
 
@@ -533,13 +616,17 @@ export const CheckoutModal: React.FC = () => {
                     <CreditCard className="w-5 h-5 text-primary-600 shrink-0" />
                     <div>
                       <span className="text-xs font-bold block">{t.checkout.tpe}</span>
-                      <span className="text-[10px] text-gray-500 block leading-tight">Sans contact</span>
+                      <span className="text-[10px] text-gray-500 block leading-tight">
+                        {mode === 'dine_in'
+                          ? (language === 'ar' ? 'TPE على الطاولة' : 'TPE à table')
+                          : 'Sans contact'}
+                      </span>
                     </div>
                   </button>
                 </div>
 
-                {/* Cash change sub-options */}
-                {paymentMethod === 'cash' && (
+                {/* Cash change sub-options (only for delivery/takeaway) */}
+                {paymentMethod === 'cash' && mode !== 'dine_in' && (
                   <div className="bg-gray-50 p-3 rounded-2xl border border-gray-100 space-y-2 mt-2">
                     <label className="text-[11px] font-bold text-gray-600 block">
                       {t.checkout.cashNeedChange}
@@ -591,7 +678,11 @@ export const CheckoutModal: React.FC = () => {
                 type="submit"
                 className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-black py-4 px-4 rounded-2xl shadow-lg shadow-emerald-600/30 flex items-center justify-between text-base transition-all active:scale-[0.99] mt-4"
               >
-                <span>{t.checkout.placeOrder}</span>
+                <span>
+                  {mode === 'dine_in'
+                    ? (language === 'ar' ? `إرسال الطلب للمطبخ (${tableNumber}) ⚡` : `Envoyer en cuisine (${tableNumber}) ⚡`)
+                    : t.checkout.placeOrder}
+                </span>
                 <span className="bg-emerald-700 px-3 py-1 rounded-xl text-sm font-extrabold">
                   {total} {t.currency}
                 </span>
