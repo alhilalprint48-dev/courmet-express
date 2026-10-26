@@ -25,14 +25,19 @@ import {
   X,
   QrCode,
   Download,
-  Printer
+  Printer,
+  BarChart3,
+  FileSpreadsheet,
+  Receipt,
+  PiggyBank,
+  CheckCircle2
 } from 'lucide-react';
 import QRCode from 'qrcode';
 import { PRODUCTS as DEFAULT_PRODUCTS, RESTAURANT_INFO, CATEGORIES } from '@/data/mockData';
 import { Product } from '@/types';
 
 export default function AdminPage() {
-  const [activeTab, setActiveTab] = useState<'catalog' | 'settings' | 'antifraud' | 'qrcodes'>('catalog');
+  const [activeTab, setActiveTab] = useState<'catalog' | 'settings' | 'antifraud' | 'qrcodes' | 'analytics'>('catalog');
   const [products, setProducts] = useState<Product[]>(DEFAULT_PRODUCTS);
   const [search, setSearch] = useState('');
 
@@ -265,7 +270,19 @@ export default function AdminPage() {
             }`}
           >
             <QrCode className="w-4 h-4 text-primary-600" />
-            <span>QR Codes Tables & Vitrine</span>
+            <span>QR Codes Tables</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('analytics')}
+            className={`py-3 text-xs font-black border-b-2 flex items-center gap-1.5 transition-all ${
+              activeTab === 'analytics'
+                ? 'border-orange-600 text-orange-600'
+                : 'border-transparent text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            <BarChart3 className="w-4 h-4 text-emerald-600" />
+            <span>📊 Chiffre d&apos;Affaires & Rapports</span>
           </button>
         </div>
       </header>
@@ -847,6 +864,175 @@ export default function AdminPage() {
                 <div className="text-xs text-slate-600 space-y-0.5">
                   <p className="font-bold text-slate-800">Scannez pour commander</p>
                   <p className="text-[11px] text-slate-400">Sans téléchargement d&apos;application</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 5: ANALYTICS & CAISSE CLOSING */}
+        {activeTab === 'analytics' && (
+          <div className="space-y-6 max-w-5xl">
+            {/* SaaS Value Proposition Banner */}
+            <div className="bg-gradient-to-r from-emerald-600 to-teal-700 rounded-3xl p-6 text-white shadow-lg flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="space-y-1">
+                <div className="inline-flex items-center gap-1.5 bg-white/20 backdrop-blur-md px-3 py-1 rounded-full text-xs font-bold text-emerald-100 mb-1">
+                  <PiggyBank className="w-4 h-4 text-amber-300" />
+                  <span>0% de Commission RestoFlow SaaS</span>
+                </div>
+                <h3 className="text-xl sm:text-2xl font-black tracking-tight">
+                  Vous avez économisé +5 052 DH ce mois-ci !
+                </h3>
+                <p className="text-xs text-emerald-100 max-w-xl">
+                  En recevant vos commandes en direct plutôt que via des applications tierces prélevant 30%, votre abonnement SaaS est déjà rentabilisé à plus de 850%.
+                </p>
+              </div>
+
+              <div className="flex gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const csvContent = "data:text/csv;charset=utf-8," 
+                      + "Numero,Date,Client,Telephone,Mode,Paiement,Total_DH\n"
+                      + "CMD-1042,2026-10-26,Karim Bennani,0661234567,Livraison,Especes,211\n"
+                      + "CMD-1045,2026-10-26,Sarah Alami,0672889900,A emporter,TPE,90\n"
+                      + "CMD-1048,2026-10-26,Amine Chraibi,0661998877,Livraison,Especes,151\n"
+                      + "CMD-1051,2026-10-26,Nadia Berrada,0650443322,Livraison,Especes,135\n";
+                    const encodedUri = encodeURI(csvContent);
+                    const link = document.createElement("a");
+                    link.setAttribute("href", encodedUri);
+                    link.setAttribute("download", `cloture_caisse_${new Date().toISOString().slice(0,10)}.csv`);
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                  }}
+                  className="bg-white/10 hover:bg-white/20 text-white font-bold px-4 py-2.5 rounded-xl text-xs flex items-center gap-1.5 backdrop-blur-sm border border-white/20 transition-all"
+                >
+                  <FileSpreadsheet className="w-4 h-4" />
+                  <span>Export CSV</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  className="bg-white text-emerald-900 hover:bg-emerald-50 font-black px-4 py-2.5 rounded-xl text-xs flex items-center gap-1.5 shadow-md transition-all active:scale-95"
+                >
+                  <Printer className="w-4 h-4 text-emerald-700" />
+                  <span>Imprimer Z de Caisse (80 mm)</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Financial Cards Grid */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
+                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
+                  Chiffre d&apos;Affaires Réalisé
+                </span>
+                <span className="text-2xl font-black text-slate-900 block">
+                  16 840 <span className="text-xs font-bold text-emerald-600">DH</span>
+                </span>
+                <span className="text-[10px] text-emerald-600 font-bold mt-1 block">
+                  +18% vs mois précédent
+                </span>
+              </div>
+
+              <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
+                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
+                  Commandes Validées
+                </span>
+                <span className="text-2xl font-black text-slate-900 block">
+                  112
+                </span>
+                <span className="text-[10px] text-slate-400 font-medium mt-1 block">
+                  0 commande refusée
+                </span>
+              </div>
+
+              <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
+                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
+                  Ticket Moyen
+                </span>
+                <span className="text-2xl font-black text-slate-900 block">
+                  150.35 <span className="text-xs font-bold text-slate-400">DH</span>
+                </span>
+                <span className="text-[10px] text-slate-400 font-medium mt-1 block">
+                  ~2.3 plats par commande
+                </span>
+              </div>
+
+              <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
+                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
+                  Économies Réalisées
+                </span>
+                <span className="text-2xl font-black text-emerald-600 block">
+                  +5 052 <span className="text-xs font-bold text-emerald-700">DH</span>
+                </span>
+                <span className="text-[10px] text-emerald-700 font-bold mt-1 block">
+                  Gain net sans commission
+                </span>
+              </div>
+            </div>
+
+            {/* Breakdown Sections */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {/* Payment Methods */}
+              <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
+                <h4 className="font-extrabold text-sm text-slate-900 flex items-center justify-between">
+                  <span>Répartition des Encaissements</span>
+                  <Receipt className="w-4 h-4 text-slate-400" />
+                </h4>
+
+                <div className="space-y-3 text-xs">
+                  <div>
+                    <div className="flex justify-between font-bold mb-1">
+                      <span className="text-slate-700">Espèces (Cash à la livraison)</span>
+                      <span className="text-slate-900 font-black">11 450 DH (68%)</span>
+                    </div>
+                    <div className="w-full h-2 rounded-full bg-slate-100 overflow-hidden">
+                      <div className="h-full bg-emerald-500 rounded-full" style={{ width: '68%' }} />
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="flex justify-between font-bold mb-1">
+                      <span className="text-slate-700">Carte Bancaire sur TPE mobile</span>
+                      <span className="text-slate-900 font-black">5 390 DH (32%)</span>
+                    </div>
+                    <div className="w-full h-2 rounded-full bg-slate-100 overflow-hidden">
+                      <div className="h-full bg-blue-500 rounded-full" style={{ width: '32%' }} />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Channels Breakdown */}
+              <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
+                <h4 className="font-extrabold text-sm text-slate-900 flex items-center justify-between">
+                  <span>Répartition par Canal</span>
+                  <BarChart3 className="w-4 h-4 text-slate-400" />
+                </h4>
+
+                <div className="space-y-3 text-xs">
+                  <div>
+                    <div className="flex justify-between font-bold mb-1">
+                      <span className="text-slate-700">Livraison à domicile</span>
+                      <span className="text-slate-900 font-black">83 commandes (74%)</span>
+                    </div>
+                    <div className="w-full h-2 rounded-full bg-slate-100 overflow-hidden">
+                      <div className="h-full bg-orange-500 rounded-full" style={{ width: '74%' }} />
+                    </div>
+                  </div>
+
+                  <div>
+                    <div className="flex justify-between font-bold mb-1">
+                      <span className="text-slate-700">À emporter & QR Code en salle</span>
+                      <span className="text-slate-900 font-black">29 commandes (26%)</span>
+                    </div>
+                    <div className="w-full h-2 rounded-full bg-slate-100 overflow-hidden">
+                      <div className="h-full bg-amber-500 rounded-full" style={{ width: '26%' }} />
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
