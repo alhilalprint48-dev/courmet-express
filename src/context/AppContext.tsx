@@ -15,6 +15,7 @@ import {
 import { translations } from '@/lib/translations';
 import { RESTAURANT_INFO, PRODUCTS as FALLBACK_PRODUCTS, CATEGORIES as FALLBACK_CATEGORIES } from '@/data/mockData';
 import { supabase } from '@/lib/supabase';
+import { normalizePhone } from '@/lib/phone';
 
 export interface RestaurantData {
   id: string;
@@ -53,12 +54,6 @@ interface AppContextType {
   addProduct: (product: Omit<Product, 'id'>) => Promise<Product>;
   deleteProduct: (productId: string) => Promise<void>;
   updateProductOptionGroups: (productId: string, groups: ProductOptionGroup[]) => Promise<void>;
-
-  // Anti-fraud & Security Settings
-  requirePhoneVerification: boolean;
-  setRequirePhoneVerification: (enabled: boolean) => void;
-  sharedTeamPin: string;
-  setSharedTeamPin: (pin: string) => void;
 
   // Anti-fraud Blacklist
   blacklist: string[];
@@ -142,75 +137,32 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [currentOrder, setCurrentOrder] = useState<Order | null>(null);
   const [liveTrackingOrder, setLiveTrackingOrder] = useState<Order | null>(null);
 
-  // Anti-fraud Blacklist state (synchronized with localStorage and Supabase)
-  const [blacklist, setBlacklist] = useState<string[]>(['0612000000', '0699112233', '0600000000']);
-  
-  // Security & Staff Credentials
-  const [requirePhoneVerification, setRequirePhoneVerificationState] = useState<boolean>(true);
-  const [sharedTeamPin, setSharedTeamPinState] = useState<string>('1234');
-
+  const [blacklist, setBlacklist] = useState<string[]>([]);
+  const refreshBlacklist = async () => {
+    const { data, error } = await supabase.from('blacklist').select('phone').eq('restaurant_id', restaurant.id);
+    setBlacklist(error ? [] : (data || []).map(row => row.phone));
+  };
   useEffect(() => {
-    try {
-      if (typeof window !== 'undefined') {
-        const saved = localStorage.getItem('resto_blacklist');
-        if (saved) {
-          setBlacklist(JSON.parse(saved));
-        }
-        const savedOtpReq = localStorage.getItem('resto_require_phone_verification');
-        if (savedOtpReq !== null) {
-          setRequirePhoneVerificationState(savedOtpReq === 'true');
-        }
-        const savedTeamPin = localStorage.getItem('resto_shared_team_pin');
-        if (savedTeamPin) {
-          setSharedTeamPinState(savedTeamPin);
-        }
+    void refreshBlacklist();
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      setBlacklist([]);
+      if (event === 'SIGNED_OUT') {
+        setCurrentOrder(null); setLiveTrackingOrder(null);
+        sessionStorage.removeItem('resto_live_order');
       }
-    } catch (e) {}
-  }, []);
-
-  const setRequirePhoneVerification = (enabled: boolean) => {
-    setRequirePhoneVerificationState(enabled);
-    try {
-      localStorage.setItem('resto_require_phone_verification', String(enabled));
-    } catch (e) {}
-  };
-
-  const setSharedTeamPin = (pin: string) => {
-    const clean = pin.trim() || '1234';
-    setSharedTeamPinState(clean);
-    try {
-      localStorage.setItem('resto_shared_team_pin', clean);
-    } catch (e) {}
-  };
-
+      setTimeout(() => { void refreshBlacklist(); }, 0);
+    });
+    return () => subscription.unsubscribe();
+  }, [restaurant.id]);
   const addToBlacklist = async (phone: string) => {
-    const clean = phone.replace(/\s+/g, '');
-    if (!clean) return;
-    setBlacklist((prev) => {
-      const updated = prev.includes(clean) ? prev : [...prev, clean];
-      try {
-        localStorage.setItem('resto_blacklist', JSON.stringify(updated));
-      } catch (e) {}
-      return updated;
-    });
-
-    try {
-      await supabase.from('blacklist').insert({ phone: clean, restaurant_id: restaurant.id });
-    } catch (e) {}
+    const { error } = await supabase.from('blacklist').insert({ phone: normalizePhone(phone), restaurant_id: restaurant.id });
+    if (error) throw new Error('Ajout refusé. Vérifiez vos droits.');
+    await refreshBlacklist();
   };
-
   const removeFromBlacklist = async (phone: string) => {
-    setBlacklist((prev) => {
-      const updated = prev.filter((p) => p !== phone);
-      try {
-        localStorage.setItem('resto_blacklist', JSON.stringify(updated));
-      } catch (e) {}
-      return updated;
-    });
-
-    try {
-      await supabase.from('blacklist').delete().eq('phone', phone);
-    } catch (e) {}
+    const { error } = await supabase.from('blacklist').delete().eq('phone', phone).eq('restaurant_id', restaurant.id);
+    if (error) throw new Error('Suppression refusée. Vérifiez vos droits.');
+    await refreshBlacklist();
   };
 
   const isRtl = language === 'ar';
@@ -291,23 +243,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
       if (prodsData && prodsData.length > 0) {
         const formatted: Product[] = prodsData.map(p => {
-          let optionGroups = p.option_groups;
-          if (!optionGroups && typeof window !== 'undefined') {
-            try {
-              const saved = localStorage.getItem('resto_prod_options_' + p.id);
-              if (saved) {
-                optionGroups = JSON.parse(saved);
-              }
-            } catch (e) {}
-          }
-          if (!optionGroups || optionGroups.length === 0) {
-            const fallbackMatch = FALLBACK_PRODUCTS.find(
-              fb => fb.name.fr.toLowerCase() === (p.name_fr || '').toLowerCase() || fb.id === p.id
-            );
-            if (fallbackMatch?.optionGroups) {
-              optionGroups = fallbackMatch.optionGroups;
-            }
-          }
+          const optionGroups = p.option_groups || [];
 
           return {
             id: p.id,
@@ -343,7 +279,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       }
 
       try {
-        const saved = localStorage.getItem('resto_live_order');
+        localStorage.removeItem('resto_live_order');
+        localStorage.removeItem('resto_shared_team_pin');
+        localStorage.removeItem('resto_blacklist');
+        const saved = sessionStorage.getItem('resto_live_order');
         if (saved) {
           setLiveTrackingOrder(JSON.parse(saved));
         }
@@ -357,9 +296,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     try {
       if (typeof window !== 'undefined') {
         if (liveTrackingOrder) {
-          localStorage.setItem('resto_live_order', JSON.stringify(liveTrackingOrder));
+          sessionStorage.setItem('resto_live_order', JSON.stringify(liveTrackingOrder));
         } else {
-          localStorage.removeItem('resto_live_order');
+          sessionStorage.removeItem('resto_live_order');
         }
       }
     } catch (e) {}
@@ -452,233 +391,77 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const placeOrder = async (customer: CustomerDetails): Promise<Order> => {
-    // 🛡️ SÉCURITÉ PRIX SERVEUR : Recalcul strict des totaux d'après la base Supabase
-    // Empêche la falsification des prix ou des sous-totaux par le client
-    let verifiedSubtotal = 0;
-    const verifiedItems: CartItem[] = cart.map((cartItem) => {
-      const dbProduct = products.find((p) => p.id === cartItem.product.id);
-      const genuineBasePrice = dbProduct ? Number(dbProduct.price) : Number(cartItem.product.price);
-      const genuineOptionsPrice = (cartItem.selectedOptions || []).reduce(
-        (sum, opt) => sum + (Number(opt.price) || 0),
-        0
-      );
-      const verifiedUnitPrice = genuineBasePrice + genuineOptionsPrice;
-      const verifiedItemTotal = verifiedUnitPrice * cartItem.quantity;
-      verifiedSubtotal += verifiedItemTotal;
-
-      return {
-        ...cartItem,
-        unitPrice: verifiedUnitPrice,
-        totalPrice: verifiedItemTotal,
-        product: {
-          ...cartItem.product,
-          price: genuineBasePrice,
-        },
-      };
-    });
-
-    const verifiedDeliveryFee = mode === 'delivery' && verifiedSubtotal > 0 ? restaurant.delivery_fee : 0;
-    const verifiedTotal = verifiedSubtotal + verifiedDeliveryFee;
-
-    const orderNum = `CMD-${Math.floor(1000 + Math.random() * 9000)}`;
+    const { data, error } = await supabase.rpc('create_order', { payload: {
+      restaurantId: restaurant.id, mode, tableNumber: mode === 'dine_in' ? tableNumber : null,
+      customer: { ...customer, phone: normalizePhone(customer.phone) },
+      items: cart.map(item => ({ productId: item.product.id, quantity: item.quantity,
+        options: item.selectedOptions.map(opt => ({ groupId: opt.groupId, optionId: opt.optionId })),
+        specialInstructions: item.specialInstructions })),
+    } });
+    if (error || !data) throw new Error(error?.message || 'Commande non enregistrée. Réessayez.');
     const newOrder: Order = {
-      id: 'ord_' + Date.now(),
-      orderNumber: orderNum,
-      createdAt: new Date().toLocaleTimeString(language === 'ar' ? 'ar-MA' : 'fr-FR', {
-        hour: '2-digit',
-        minute: '2-digit'
-      }),
-      status: 'new',
-      mode,
-      tableNumber: mode === 'dine_in' ? tableNumber : undefined,
-      items: verifiedItems,
-      subtotal: verifiedSubtotal,
-      deliveryFee: verifiedDeliveryFee,
-      total: verifiedTotal,
-      customer,
+      id: data.id, orderNumber: data.order_number, createdAt: data.created_at, status: data.status,
+      mode: data.mode, tableNumber: data.table_number || undefined,
+      subtotal: Number(data.subtotal), deliveryFee: Number(data.delivery_fee), total: Number(data.total),
+      customer: { ...customer, phone: data.customer_phone },
+      items: data.items.map((line: any, index: number) => ({
+        cartItemId: data.id + '-' + index,
+        product: { id: line.productId, name: line.name, price: Number(line.unitPrice),
+          categoryId: '', description: { fr: '', ar: '' }, image: '', allergens: [], isAvailable: true },
+        quantity: line.quantity, unitPrice: Number(line.unitPrice), totalPrice: Number(line.totalPrice),
+        selectedOptions: line.selectedOptions, specialInstructions: line.specialInstructions,
+      })),
     };
-    
-    // 1. Broadcast to in-memory API (fallback local)
-    fetch('/api/orders', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(newOrder),
-    }).catch(err => console.error(err));
-
-    // 2. Insert into Supabase table orders with tenant restaurant_id
-    try {
-      const { data: insertedOrder, error: orderErr } = await supabase.from('orders').insert({
-        restaurant_id: restaurant.id,
-        order_number: orderNum,
-        status: 'new',
-        mode,
-        table_number: mode === 'dine_in' ? tableNumber : null,
-        subtotal: verifiedSubtotal,
-        delivery_fee: verifiedDeliveryFee,
-        total: verifiedTotal,
-        customer_name: customer.fullName,
-        customer_phone: customer.phone,
-        customer_address: mode === 'dine_in' ? `Sur place - ${tableNumber}` : customer.address,
-        customer_landmark: customer.landmark,
-        special_instructions: customer.specialInstructions,
-        delivery_timeslot: customer.deliveryTimeSlot,
-        payment_method: customer.paymentMethod,
-        cash_change_amount: customer.cashChangeAmount,
-        gps_lat: customer.gpsCoords?.lat,
-        gps_lng: customer.gpsCoords?.lng,
-      }).select().single();
-
-      if (insertedOrder && verifiedItems.length > 0) {
-        const orderItemsToInsert = verifiedItems.map(item => ({
-          order_id: insertedOrder.id,
-          product_id: item.product.id || null,
-          product_name_fr: item.product.name.fr,
-          quantity: item.quantity,
-          unit_price: item.unitPrice,
-          total_price: item.totalPrice,
-          selected_options: item.selectedOptions || [],
-          special_instructions: item.specialInstructions || null,
-        }));
-        await supabase.from('order_items').insert(orderItemsToInsert);
-      }
-    } catch (e) {
-      console.warn("Could not push order directly to Supabase:", e);
-    }
-
-    setCurrentOrder(newOrder);
-    setLiveTrackingOrder(newOrder);
-    clearCart();
-    setIsCheckoutOpen(false);
+    setCurrentOrder(newOrder); setLiveTrackingOrder(newOrder); clearCart(); setIsCheckoutOpen(false);
     return newOrder;
   };
 
-  // Synchronisation Catalogue Admin <-> Supabase
+  // Mutations use the authenticated session. RLS enforces tenant and role.
   const toggleProductAvailability = async (productId: string) => {
-    let nextAvailable = false;
-    setProducts((prev) =>
-      prev.map((p) => {
-        if (p.id === productId) {
-          nextAvailable = !p.isAvailable;
-          return { ...p, isAvailable: !p.isAvailable };
-        }
-        return p;
-      })
-    );
-
-    try {
-      await supabase
-        .from('products')
-        .update({ is_available: nextAvailable })
-        .eq('id', productId);
-    } catch (e) {
-      console.warn("Error updating product availability:", e);
-    }
+    const product = products.find(p => p.id === productId);
+    if (!product) return;
+    const { data, error } = await supabase.from('products').update({ is_available: !product.isAvailable })
+      .eq('id', productId).eq('restaurant_id', restaurant.id).select('id').single();
+    if (error || !data) throw new Error('Modification refusée.');
+    setProducts(prev => prev.map(p => p.id === productId ? { ...p, isAvailable: !p.isAvailable } : p));
   };
-
   const addProduct = async (newProd: Omit<Product, 'id'>): Promise<Product> => {
-    let createdProd: Product = {
-      ...newProd,
-      id: 'prod_' + Date.now(),
-    };
-
-    try {
-      const { data, error } = await supabase.from('products').insert({
-        restaurant_id: restaurant.id,
-        category_id: newProd.categoryId,
-        name_fr: newProd.name.fr,
-        name_ar: newProd.name.ar || newProd.name.fr,
-        description_fr: newProd.description.fr,
-        price: newProd.price,
-        image: newProd.image,
-        allergens: newProd.allergens || [],
-        is_available: newProd.isAvailable,
-      }).select().single();
-
-      if (data) {
-        createdProd = {
-          id: data.id,
-          categoryId: data.category_id || newProd.categoryId,
-          name: { fr: data.name_fr, ar: data.name_ar || data.name_fr },
-          description: { fr: data.description_fr || '', ar: data.description_ar || '' },
-          price: Number(data.price),
-          image: data.image || newProd.image,
-          allergens: data.allergens || [],
-          isAvailable: data.is_available,
-          optionGroups: newProd.optionGroups || [],
-        };
-      }
-    } catch (e) {
-      console.warn("Error inserting product in Supabase:", e);
-    }
-
-    if (typeof window !== 'undefined' && newProd.optionGroups && newProd.optionGroups.length > 0) {
-      try {
-        localStorage.setItem('resto_prod_options_' + createdProd.id, JSON.stringify(newProd.optionGroups));
-      } catch (e) {}
-    }
-
-    setProducts((prev) => [createdProd, ...prev]);
-    return createdProd;
+    const { data, error } = await supabase.from('products').insert({
+      restaurant_id: restaurant.id, category_id: newProd.categoryId,
+      name_fr: newProd.name.fr, name_ar: newProd.name.ar || newProd.name.fr,
+      description_fr: newProd.description.fr, description_ar: newProd.description.ar,
+      price: newProd.price, image: newProd.image, allergens: newProd.allergens || [],
+      is_available: newProd.isAvailable, option_groups: newProd.optionGroups || [],
+    }).select('id').single();
+    if (error || !data) throw new Error('Création du produit refusée.');
+    const product = { ...newProd, id: data.id };
+    setProducts(prev => [product, ...prev]); return product;
   };
-
   const updateProductOptionGroups = async (productId: string, groups: ProductOptionGroup[]) => {
-    setProducts((prev) =>
-      prev.map((p) => (p.id === productId ? { ...p, optionGroups: groups } : p))
-    );
-    if (typeof window !== 'undefined') {
-      try {
-        localStorage.setItem('resto_prod_options_' + productId, JSON.stringify(groups));
-      } catch (e) {}
-    }
-    try {
-      await supabase.from('products').update({ option_groups: groups } as any).eq('id', productId);
-    } catch (e) {}
+    const { data, error } = await supabase.from('products').update({ option_groups: groups })
+      .eq('id', productId).eq('restaurant_id', restaurant.id).select('id').single();
+    if (error || !data) throw new Error('Modification des options refusée.');
+    setProducts(prev => prev.map(p => p.id === productId ? { ...p, optionGroups: groups } : p));
   };
-
   const deleteProduct = async (productId: string) => {
-    setProducts((prev) => prev.filter((p) => p.id !== productId));
-    try {
-      await supabase.from('products').delete().eq('id', productId);
-    } catch (e) {
-      console.warn("Error deleting product in Supabase:", e);
-    }
+    const { data, error } = await supabase.from('products').delete().eq('id', productId)
+      .eq('restaurant_id', restaurant.id).select('id').single();
+    if (error || !data) throw new Error('Suppression du produit refusée.');
+    setProducts(prev => prev.filter(p => p.id !== productId));
   };
-
-  const addCategory = async (nameFr: string, nameAr: string, iconName: string = 'UtensilsCrossed'): Promise<Category> => {
-    const slugId = nameFr.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-');
-    const newCatObj: Category = {
-      id: slugId || ('cat_' + Date.now()),
-      name: { fr: nameFr, ar: nameAr || nameFr },
-      iconName,
-    };
-
-    try {
-      const { data: inserted } = await supabase.from('categories').insert({
-        restaurant_id: restaurant.id,
-        name_fr: nameFr,
-        name_ar: nameAr || nameFr,
-        icon_name: iconName,
-        sort_order: categories.length + 1,
-      }).select().single();
-
-      if (inserted) {
-        newCatObj.id = inserted.id;
-      }
-    } catch (e) {
-      console.warn("Could not insert category in Supabase:", e);
-    }
-
-    setCategories((prev) => [...prev, newCatObj]);
-    return newCatObj;
+  const addCategory = async (nameFr: string, nameAr: string, iconName = 'UtensilsCrossed'): Promise<Category> => {
+    const { data, error } = await supabase.from('categories').insert({ restaurant_id: restaurant.id,
+      name_fr: nameFr, name_ar: nameAr || nameFr, icon_name: iconName, sort_order: categories.length + 1,
+    }).select('id').single();
+    if (error || !data) throw new Error('Création de catégorie refusée.');
+    const category = { id: data.id, name: { fr: nameFr, ar: nameAr || nameFr }, iconName };
+    setCategories(prev => [...prev, category]); return category;
   };
-
   const deleteCategory = async (categoryId: string) => {
-    setCategories((prev) => prev.filter((c) => c.id !== categoryId));
-    try {
-      await supabase.from('categories').delete().eq('id', categoryId);
-    } catch (e) {
-      console.warn("Could not delete category in Supabase:", e);
-    }
+    const { data, error } = await supabase.from('categories').delete().eq('id', categoryId)
+      .eq('restaurant_id', restaurant.id).select('id').single();
+    if (error || !data) throw new Error('Suppression de catégorie refusée.');
+    setCategories(prev => prev.filter(c => c.id !== categoryId));
   };
 
   return (
@@ -702,10 +485,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         addProduct,
         deleteProduct,
         updateProductOptionGroups,
-        requirePhoneVerification,
-        setRequirePhoneVerification,
-        sharedTeamPin,
-        setSharedTeamPin,
         blacklist,
         addToBlacklist,
         removeFromBlacklist,

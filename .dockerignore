@@ -4,3 +4,8 @@ node_modules
 .gitignore
 README.md
 .env*.local
+
+.env
+.env*
+!.env.example
+out

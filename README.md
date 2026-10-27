@@ -9,7 +9,7 @@ Système de commande en ligne pour restaurant, Click & Collect et livraison à d
 | Module | URL | Description |
 | :--- | :--- | :--- |
 | **Menu Client PWA** | `http://localhost:3000/` | Carte interactive multilingue (FR / Arabe avec RTL direct), variantes, suppléments, géolocalisation GPS, panier, confirmation et WhatsApp en 1 clic. |
-| **KDS Cuisine & Caisse** | `http://localhost:3000/kds` | Écran de production en direct, alerte sonore Web Audio, avancement des statuts, double impression tickets thermiques 80 mm et simulateur de flux. |
+| **KDS Cuisine & Caisse** | `http://localhost:3000/kds` | Écran de production en direct, alerte sonore Web Audio, avancement des statuts, double impression tickets thermiques 80 mm. |
 | **Module Coursier / Livreur** | `http://localhost:3000/livreur` | Ergonomie smartphone, appel client en 1 clic (`tel:...`), navigation GPS Waze / Google Maps, rappel de monnaie et clôture d'encaissement obligatoire. |
 | **Back-Office Restaurant** | `http://localhost:3000/admin` | Rupture immédiate de plats en 1 clic, ajout de plats avec upload local ou lien URL, gestion des zones, sécurité anti-fraude (Blacklist) et générateur de QR Codes. |
 
@@ -19,7 +19,7 @@ Système de commande en ligne pour restaurant, Click & Collect et livraison à d
 
 - **Front-End & PWA** : Next.js 14 (App Router) + React 18 + Tailwind CSS.
 - **Multilingue** : Français & Arabe (support natif LTR / RTL `dir="rtl"`).
-- **Temps Réel & Données** : API centralisée `/api/orders` & `/api/products`.
+- **Temps Réel & Données** : Supabase avec RLS, Supabase Auth et création transactionnelle de commande en base.
 - **Impression Tickets** : ESC/POS 80 mm avec découpe papier automatique (`GS V 0`) et sonnerie imprimante (`ESC B`).
 - **Génération QR Code** : Moteur vectoriel pour tables et vitrine avec export PNG et impression de chevalet.
 
@@ -27,9 +27,11 @@ Système de commande en ligne pour restaurant, Click & Collect et livraison à d
 
 ## 💻 Démarrage Rapide
 
+Voir [SECURITY_DEPLOYMENT.md](SECURITY_DEPLOYMENT.md) avant toute mise en production : installation SQL, comptes et fournisseur SMS obligatoires.
+
 ### 1. Installation
 ```bash
-npm install
+npm ci
 ```
 
 ### 2. Lancement en Développement
@@ -41,7 +43,7 @@ Accédez à l'application sur [http://localhost:3000](http://localhost:3000).
 ### 3. Build de Production
 ```bash
 npm run build
-npm start
+# Publier le dossier out/ sur un hébergement statique.
 ```
 
 ---
@@ -65,9 +67,9 @@ L'impression est disponible sous deux formats :
 
 ## 🛡️ Mesures Anti-Fraude & Sécurisation COD
 
-Pour éliminer les risques de fausses commandes en paiement à la livraison :
+Pour réduire les risques de fausses commandes en paiement à la livraison :
 - **Blacklist Automatique** : Blocage immédiat des numéros de téléphone ayant fait l'objet d'un refus de livraison abusif (géré dans `/admin`).
-- **Validation OTP SMS** : Bouton d'envoi de code de vérification à 4 chiffres lors de la saisie du numéro.
+- **Validation OTP SMS** : Bouton d'envoi de code de vérification envoyé par Supabase Auth lors de la saisie du numéro.
 - **Plafonnement des montants** : Limite fixée par défaut à 500 DH pour toute commande sans acompte préalable.
 
 ---

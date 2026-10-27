@@ -41,7 +41,7 @@ export const LiveOrderTracker: React.FC = () => {
         const { data, error } = await supabase
           .from('orders')
           .select('status')
-          .eq('order_number', liveTrackingOrder.orderNumber)
+          .eq('id', liveTrackingOrder.id)
           .maybeSingle();
 
         if (data && data.status && data.status !== status) {

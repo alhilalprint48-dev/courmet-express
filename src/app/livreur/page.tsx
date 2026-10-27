@@ -20,7 +20,7 @@ import { Order } from '@/types';
 import { supabase } from '@/lib/supabase';
 import { StaffAuthGate } from '@/components/StaffAuthGate';
 
-export default function DeliveryPage() {
+function DeliveryPage() {
   const [deliveries, setDeliveries] = useState<Order[]>([]);
   const [collectedAmounts, setCollectedAmounts] = useState<{ [key: string]: boolean }>({});
 
@@ -107,12 +107,7 @@ export default function DeliveryPage() {
         return;
       }
 
-      // 2. Fallback to local memory API
-      const res = await fetch('/api/orders');
-      if (res.ok) {
-        const data: Order[] = await res.json();
-        setDeliveries(data.filter((d) => d.mode === 'delivery'));
-      }
+      setDeliveries([]);
     } catch (e) {
       console.warn("Failed to fetch deliveries:", e);
     }
@@ -132,24 +127,9 @@ export default function DeliveryPage() {
   };
 
   const handleFinishDelivery = async (orderId: string) => {
-    setDeliveries((prev) =>
-      prev.map((d) => (d.id === orderId ? { ...d, status: 'delivered' } : d))
-    );
-
-    try {
-      await supabase
-        .from('orders')
-        .update({ status: 'delivered' })
-        .eq('id', orderId);
-
-      await fetch('/api/orders', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderId, status: 'delivered' }),
-      });
-    } catch (err) {
-      console.error(err);
-    }
+    const { data, error } = await supabase.from('orders').update({ status: 'delivered' }).eq('id', orderId).select('id');
+    if (error || !data?.length) alert('Clôture refusée. Vérifiez vos droits et le statut.');
+    await fetchDeliveries();
   };
 
   const openGpsNavigation = (order: Order) => {
@@ -172,7 +152,7 @@ export default function DeliveryPage() {
   const finishedDeliveries = deliveries.filter((d) => d.status === 'delivered');
 
   return (
-    <StaffAuthGate role="livreur" title="Espace Coursier & Livreur" subtitle="Saisissez votre code PIN coursier pour accéder aux tournées de livraison">
+    <>
       <div className="min-h-screen bg-slate-900 text-slate-100 flex flex-col font-sans max-w-lg mx-auto">
       {/* Header Livreur */}
       <div className="bg-slate-800 border-b border-slate-700/80 p-4 sticky top-0 z-20">
@@ -372,6 +352,8 @@ export default function DeliveryPage() {
         )}
       </div>
     </div>
-    </StaffAuthGate>
+    </>
   );
 }
+
+export default function ProtectedPage() { return <StaffAuthGate role="livreur" title="Espace Coursier & Livreur" subtitle="Connectez-vous avec votre compte livreur"><DeliveryPage /></StaffAuthGate>; }

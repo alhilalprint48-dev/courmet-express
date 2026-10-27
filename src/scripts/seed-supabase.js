@@ -1,7 +1,9 @@
 const { createClient } = require('@supabase/supabase-js');
 
-const supabaseUrl = 'https://xonihnqotjbnirwpajyu.supabase.co';
-const supabaseKey = 'sb_publishable_Y9bA01yHf430LRCfQhzD9g_08kG8bN2';
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+if (!supabaseUrl || !supabaseKey) throw new Error('Configuration de seed manquante');
+if (process.env.ALLOW_SEED !== 'yes') throw new Error('Seed désactivé : ALLOW_SEED=yes requis');
 
 const supabase = createClient(supabaseUrl, supabaseKey);
 

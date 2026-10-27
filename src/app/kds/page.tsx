@@ -27,7 +27,7 @@ import { RESTAURANT_INFO } from '@/data/mockData';
 import { supabase } from '@/lib/supabase';
 import { StaffAuthGate } from '@/components/StaffAuthGate';
 
-export default function KdsPage() {
+function KdsPage() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [kdsTab, setKdsTab] = useState<'active' | 'completed'>('active');
   const [soundEnabled, setSoundEnabled] = useState(true);
@@ -35,7 +35,7 @@ export default function KdsPage() {
   const [ticketType, setTicketType] = useState<'kitchen' | 'delivery'>('kitchen');
   const previousOrdersCount = React.useRef<number>(0);
 
-  // Fetch orders from Supabase (Persistent Database) with fallback to shared API
+  // Fetch persisted orders; authorization is enforced by Supabase RLS.
   const fetchOrders = async () => {
     try {
       // 1. Fetch from Supabase
@@ -142,16 +142,7 @@ export default function KdsPage() {
         return;
       }
 
-      // 2. Fallback to API endpoint if Supabase has 0 orders
-      const res = await fetch('/api/orders');
-      if (res.ok) {
-        const data: Order[] = await res.json();
-        if (previousOrdersCount.current > 0 && data.length > previousOrdersCount.current) {
-          playAlertSound();
-        }
-        previousOrdersCount.current = data.length;
-        setOrders(data);
-      }
+      setOrders([]);
     } catch (e) {
       console.warn("Failed to fetch KDS orders:", e);
     }
@@ -201,70 +192,22 @@ export default function KdsPage() {
   };
 
   const updateOrderStatus = async (orderId: string, nextStatus: OrderStatus) => {
-    // Optimistic UI update
-    setOrders((prev) =>
-      prev.map((o) => (o.id === orderId ? { ...o, status: nextStatus } : o))
-    );
-
-    try {
-      // 1. Update in Supabase cloud database
-      await supabase
-        .from('orders')
-        .update({ status: nextStatus })
-        .eq('id', orderId);
-
-      // 2. Update local API in-memory
-      await fetch('/api/orders', {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orderId, status: nextStatus }),
-      });
-    } catch (err) {
-      console.error(err);
-    }
+    const { data, error } = await supabase.from('orders').update({ status: nextStatus }).eq('id', orderId).select('id');
+    if (error || !data?.length) alert('Modification refusée. Vérifiez vos droits et le statut.');
+    await fetchOrders();
   };
 
   const deleteOrder = async (orderId: string) => {
-    if (!window.confirm("Voulez-vous vraiment supprimer définitivement cette commande ?")) {
-      return;
-    }
-
-    // Optimistic UI update
-    setOrders((prev) => prev.filter((o) => o.id !== orderId));
-
-    try {
-      // 1. Delete associated order_items first
-      await supabase.from('order_items').delete().eq('order_id', orderId);
-      // 2. Delete order from Supabase
-      await supabase.from('orders').delete().eq('id', orderId);
-      // 3. Delete in local API
-      await fetch(`/api/orders?orderId=${orderId}`, { method: 'DELETE' }).catch(() => {});
-    } catch (err) {
-      console.error("Failed to delete order:", err);
-    }
+    if (!window.confirm('Supprimer cette commande ? Cette action est réservée au gérant.')) return;
+    const { data, error } = await supabase.from('orders').delete().eq('id', orderId).select('id');
+    if (error || !data?.length) alert('Suppression refusée. Seul le gérant peut supprimer une commande.');
+    await fetchOrders();
   };
-
   const clearDeliveredOrders = async () => {
-    const delivered = orders.filter((o) => o.status === 'delivered');
-    if (delivered.length === 0) {
-      alert("Aucune commande terminée à nettoyer.");
-      return;
-    }
-    if (!window.confirm(`Supprimer les ${delivered.length} commande(s) terminée(s) / archivée(s) ?`)) {
-      return;
-    }
-
-    setOrders((prev) => prev.filter((o) => o.status !== 'delivered'));
-
-    try {
-      for (const o of delivered) {
-        await supabase.from('order_items').delete().eq('order_id', o.id);
-        await supabase.from('orders').delete().eq('id', o.id);
-        await fetch(`/api/orders?orderId=${o.id}`, { method: 'DELETE' }).catch(() => {});
-      }
-    } catch (err) {
-      console.error("Error clearing delivered orders:", err);
-    }
+    if (!window.confirm('Supprimer les commandes terminées ? Action réservée au gérant.')) return;
+    const { data, error } = await supabase.from('orders').delete().eq('status', 'delivered').select('id');
+    if (error || !data?.length) alert('Aucune commande supprimée. Vérifiez vos droits.');
+    await fetchOrders();
   };
 
   const handlePrint = (order: Order, type: 'kitchen' | 'delivery') => {
@@ -301,7 +244,7 @@ export default function KdsPage() {
   };
 
   return (
-    <StaffAuthGate role="kds" title="Cuisine & KDS" subtitle="Saisissez le code PIN cuisine pour accéder au flux de production">
+    <>
       <div className="min-h-screen bg-slate-900 text-white p-4 sm:p-6 flex flex-col font-sans">
       {/* KDS Top Header */}
       <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-slate-800">
@@ -326,69 +269,6 @@ export default function KdsPage() {
 
         {/* Controls */}
         <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-          <button
-            onClick={async () => {
-              // Generate a simulated realistic live order
-              const sampleCustomers = [
-                { name: 'Amine Chraibi', phone: '0661998877', addr: '12 Rue Normandie, Gauthier', note: 'Sonnette A3', change: 'Billet de 200 DH' },
-                { name: 'Nadia Berrada', phone: '0650443322', addr: '88 Bd Zerktouni, 5ème étage', note: '', change: 'Appoint exact' },
-                { name: 'Omar Kabbaj', phone: '0677112233', addr: '34 Rue Jean Jaurès', note: 'Appeler avant de monter', change: 'Billet de 100 DH' },
-              ];
-              const sample = sampleCustomers[Math.floor(Math.random() * sampleCustomers.length)];
-              const simOrder: Order = {
-                id: 'sim_' + Date.now(),
-                orderNumber: `CMD-${Math.floor(2000 + Math.random() * 8000)}`,
-                createdAt: new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }),
-                status: 'new',
-                mode: 'delivery',
-                items: [
-                  {
-                    cartItemId: 'sim_it_1',
-                    product: {
-                      id: 'b1',
-                      categoryId: 'burgers',
-                      name: { fr: 'Le Truffe & Bacon Burger', ar: '' },
-                      description: { fr: '', ar: '' },
-                      price: 68,
-                      image: '',
-                      allergens: [],
-                      isAvailable: true,
-                    },
-                    selectedOptions: [
-                      { groupId: '1', groupName: { fr: 'Cuisson', ar: '' }, optionId: '1', optionName: { fr: 'Saignant', ar: '' }, price: 0 },
-                    ],
-                    quantity: 2,
-                    unitPrice: 68,
-                    totalPrice: 136,
-                    specialInstructions: 'Bien chaud SVP',
-                  }
-                ],
-                subtotal: 136,
-                deliveryFee: 15,
-                total: 151,
-                customer: {
-                  fullName: sample.name,
-                  phone: sample.phone,
-                  address: sample.addr,
-                  specialInstructions: sample.note,
-                  paymentMethod: 'cash',
-                  cashChangeAmount: sample.change,
-                }
-              };
-
-              await fetch('/api/orders', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(simOrder),
-              });
-              fetchOrders();
-            }}
-            className="px-3 py-1.5 rounded-xl bg-orange-600 hover:bg-orange-500 text-xs font-bold text-white shadow flex items-center gap-1.5 transition-colors"
-            title="Injecter une commande de test pour simuler la charge de travail"
-          >
-            <span>+ Simuler Commande Live</span>
-          </button>
-
           <button
             onClick={() => {
               setSoundEnabled(!soundEnabled);
@@ -825,6 +705,8 @@ export default function KdsPage() {
         </div>
       )}
     </div>
-    </StaffAuthGate>
+    </>
   );
 }
+
+export default function ProtectedPage() { return <StaffAuthGate role="kds" title="Cuisine & KDS" subtitle="Connectez-vous avec votre compte cuisine"><KdsPage /></StaffAuthGate>; }
