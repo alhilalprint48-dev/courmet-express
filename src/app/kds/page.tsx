@@ -521,7 +521,7 @@ function KdsPage() {
                     onClick={() => updateOrderStatus(order.id, 'preparing')}
                     className="w-full bg-orange-600 hover:bg-orange-500 text-white text-xs font-black py-2.5 rounded-xl transition-colors"
                   >
-                    Accepter & Lancer en Cuisine
+                    {order.mode === 'dine_in' ? 'Accepter la table & préparer' : 'WhatsApp reçu : accepter & préparer'}
                   </button>
                 )}
 

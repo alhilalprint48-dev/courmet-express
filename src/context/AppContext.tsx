@@ -393,14 +393,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const placeOrder = async (customer: CustomerDetails): Promise<Order> => {
     const { data, error } = await supabase.rpc('create_order', { payload: {
       restaurantId: restaurant.id, mode, tableNumber: mode === 'dine_in' ? tableNumber : null,
-      customer: { ...customer, phone: normalizePhone(customer.phone) },
+      customer: { ...customer, phone: mode === 'dine_in' ? '' : normalizePhone(customer.phone) },
       items: cart.map(item => ({ productId: item.product.id, quantity: item.quantity,
         options: item.selectedOptions.map(opt => ({ groupId: opt.groupId, optionId: opt.optionId })),
         specialInstructions: item.specialInstructions })),
     } });
     if (error || !data) throw new Error(error?.message || 'Commande non enregistrée. Réessayez.');
     const newOrder: Order = {
-      id: data.id, orderNumber: data.order_number, createdAt: data.created_at, status: data.status,
+      id: data.id, trackingToken: data.tracking_token, orderNumber: data.order_number, createdAt: data.created_at, status: data.status,
       mode: data.mode, tableNumber: data.table_number || undefined,
       subtotal: Number(data.subtotal), deliveryFee: Number(data.delivery_fee), total: Number(data.total),
       customer: { ...customer, phone: data.customer_phone },

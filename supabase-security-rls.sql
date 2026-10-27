@@ -2,7 +2,7 @@
 BEGIN;
 CREATE SCHEMA IF NOT EXISTS private;
 REVOKE ALL ON SCHEMA private FROM PUBLIC, anon;
-GRANT USAGE ON SCHEMA private TO authenticated;
+GRANT USAGE ON SCHEMA private TO anon,authenticated;
 CREATE TABLE IF NOT EXISTS private.staff_members (
  user_id uuid NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
  restaurant_id uuid NOT NULL REFERENCES public.restaurants(id) ON DELETE CASCADE,
@@ -92,27 +92,50 @@ CREATE POLICY manager_delete_items ON public.order_items FOR DELETE TO authentic
 GRANT SELECT,INSERT,UPDATE,DELETE ON public.blacklist TO authenticated;
 CREATE POLICY manager_blacklist ON public.blacklist FOR ALL TO authenticated USING(private.staff_role(restaurant_id) IN ('admin','superadmin')) WITH CHECK(private.staff_role(restaurant_id) IN ('admin','superadmin'));
 
+CREATE TABLE IF NOT EXISTS private.order_tracking (
+ order_id uuid PRIMARY KEY REFERENCES public.orders(id) ON DELETE CASCADE, token_hash text NOT NULL
+);
+ALTER TABLE private.order_tracking ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON private.order_tracking FROM PUBLIC,anon,authenticated;
+CREATE OR REPLACE FUNCTION private.guest_order_status(order_id uuid, token text) RETURNS text
+LANGUAGE sql SECURITY DEFINER SET search_path='' AS $$
+ SELECT o.status::text FROM public.orders o JOIN private.order_tracking t ON t.order_id=o.id
+ WHERE o.id=$1 AND t.token_hash=md5($2) AND length($2)=72
+$$;
+REVOKE ALL ON FUNCTION private.guest_order_status(uuid,text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION private.guest_order_status(uuid,text) TO anon,authenticated;
+CREATE OR REPLACE FUNCTION public.guest_order_status(order_id uuid, token text) RETURNS text
+LANGUAGE sql SECURITY INVOKER SET search_path='' AS $$ SELECT private.guest_order_status($1,$2) $$;
+REVOKE ALL ON FUNCTION public.guest_order_status(uuid,text) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.guest_order_status(uuid,text) TO anon,authenticated;
+
 CREATE OR REPLACE FUNCTION private.create_order(payload jsonb) RETURNS jsonb
 LANGUAGE plpgsql SECURITY DEFINER SET search_path = '' AS $$
 DECLARE
  uid uuid:=auth.uid(); tenant public.restaurants%ROWTYPE; prod public.products%ROWTYPE;
- phone text; normalized text; customer jsonb:=payload->'customer';
+ tracking text:=gen_random_uuid()::text||gen_random_uuid()::text; normalized text; customer jsonb:=payload->'customer';
  item jsonb; choice jsonb; grp jsonb; opt jsonb; chosen jsonb; lines jsonb:='[]';
  line jsonb; opts jsonb; seen text[]; n int; qty int; unit numeric; sub numeric:=0; fee numeric; grand numeric;
  oid uuid:=gen_random_uuid(); num text:='CMD-'||upper(substr(replace(gen_random_uuid()::text,'-',''),1,28));
  md text:=payload->>'mode'; payment text:=customer->>'paymentMethod'; result jsonb;
 BEGIN
- IF uid IS NULL THEN RAISE EXCEPTION 'Authentification requise' USING ERRCODE='42501'; END IF;
- SELECT u.phone INTO phone FROM auth.users u WHERE u.id=uid AND u.phone_confirmed_at IS NOT NULL;
- normalized:=regexp_replace(coalesce(customer->>'phone',''),'[^0-9]','','g');
+ normalized:=CASE WHEN md='dine_in' THEN '' ELSE regexp_replace(coalesce(customer->>'phone',''),'[^0-9]','','g') END;
  IF normalized ~ '^0[67][0-9]{8}$' THEN normalized:='212'||substr(normalized,2); END IF;
- IF phone IS NULL OR regexp_replace(phone,'[^0-9]','','g')<>normalized THEN RAISE EXCEPTION 'Veuillez vérifier votre numéro de téléphone' USING ERRCODE='42501'; END IF;
- PERFORM pg_advisory_xact_lock(hashtextextended(uid::text,0));
- IF EXISTS(SELECT 1 FROM public.orders WHERE customer_user_id=uid AND created_at>now()-interval '30 seconds') THEN RAISE EXCEPTION 'Veuillez patienter avant une autre commande'; END IF;
+ IF md<>'dine_in' AND normalized !~ '^[1-9][0-9]{7,14}$' THEN RAISE EXCEPTION 'Numéro de téléphone invalide'; END IF;
+ -- Guests cannot read or write tables. This RPC creates only pending orders with canonical prices.
+ -- Serialize per restaurant, then throttle each phone/table and total guest traffic.
+ PERFORM pg_advisory_xact_lock(hashtextextended(payload->>'restaurantId',0));
+ IF EXISTS(SELECT 1 FROM public.orders WHERE restaurant_id=(payload->>'restaurantId')::uuid
+   AND created_at>now()-interval '30 seconds' AND
+   ((md='dine_in' AND mode='dine_in' AND table_number=trim(payload->>'tableNumber')) OR
+    (md<>'dine_in' AND customer_phone='+'||normalized)))
+ THEN RAISE EXCEPTION 'Veuillez patienter avant une autre commande'; END IF;
+ IF (SELECT count(*) FROM public.orders WHERE restaurant_id=(payload->>'restaurantId')::uuid
+   AND created_at>now()-interval '1 minute')>=60 THEN RAISE EXCEPTION 'Trop de commandes. Contactez le restaurant'; END IF;
  SELECT * INTO tenant FROM public.restaurants WHERE id=(payload->>'restaurantId')::uuid AND is_active FOR SHARE;
  IF NOT FOUND THEN RAISE EXCEPTION 'Restaurant indisponible'; END IF;
  IF md IS NULL OR md NOT IN ('delivery','takeaway','dine_in') OR payment IS NULL OR payment NOT IN ('cash','tpe') THEN RAISE EXCEPTION 'Commande invalide'; END IF;
- IF coalesce(length(trim(customer->>'fullName')),0) NOT BETWEEN 1 AND 128 OR
+ IF (md<>'dine_in' AND coalesce(length(trim(customer->>'fullName')),0) NOT BETWEEN 1 AND 128) OR
  (md='delivery' AND coalesce(length(trim(customer->>'address')),0) NOT BETWEEN 1 AND 1000) OR
  (md='dine_in' AND coalesce(length(trim(payload->>'tableNumber')),0) NOT BETWEEN 1 AND 32) THEN RAISE EXCEPTION 'Coordonnées requises'; END IF;
  IF EXISTS(SELECT 1 FROM (
@@ -152,18 +175,19 @@ BEGIN
  fee:=CASE WHEN md='delivery' THEN tenant.delivery_fee ELSE 0 END; grand:=sub+fee;
  IF grand<=0 OR (md='delivery' AND sub<tenant.min_delivery_amount) OR (payment='cash' AND grand>500) THEN RAISE EXCEPTION 'Montant hors limites'; END IF;
  INSERT INTO public.orders(id,restaurant_id,customer_user_id,order_number,status,mode,table_number,subtotal,delivery_fee,total,customer_name,customer_phone,customer_address,customer_landmark,special_instructions,delivery_timeslot,payment_method,cash_change_amount,is_phone_verified)
- VALUES(oid,tenant.id,uid,num,'new',md,left(payload->>'tableNumber',32),sub,fee,grand,customer->>'fullName','+'||normalized,left(customer->>'address',1000),left(customer->>'landmark',500),left(customer->>'specialInstructions',1000),left(customer->>'deliveryTimeSlot',64),payment,left(customer->>'cashChangeAmount',64),true);
+ VALUES(oid,tenant.id,uid,num,'new',md,CASE WHEN md='dine_in' THEN trim(payload->>'tableNumber') ELSE NULL END,sub,fee,grand,CASE WHEN md='dine_in' THEN coalesce(nullif(left(trim(customer->>'fullName'),128),''),'Client '||trim(payload->>'tableNumber')) ELSE customer->>'fullName' END,CASE WHEN md='dine_in' THEN '' ELSE '+'||normalized END,left(customer->>'address',1000),left(customer->>'landmark',500),left(customer->>'specialInstructions',1000),left(customer->>'deliveryTimeSlot',64),payment,left(customer->>'cashChangeAmount',64),false);
  FOR line IN SELECT value FROM jsonb_array_elements(lines) LOOP
   INSERT INTO public.order_items(order_id,product_id,product_name_fr,quantity,unit_price,total_price,selected_options,special_instructions)
   VALUES(oid,(line->>'productId')::uuid,line->'name'->>'fr',(line->>'quantity')::int,(line->>'unitPrice')::numeric,(line->>'totalPrice')::numeric,line->'selectedOptions',line->>'specialInstructions');
  END LOOP;
  SELECT to_jsonb(o) INTO result FROM public.orders o WHERE o.id=oid;
- RETURN result||jsonb_build_object('items',lines);
+ INSERT INTO private.order_tracking(order_id,token_hash) VALUES(oid,md5(tracking));
+ RETURN result||jsonb_build_object('items',lines,'tracking_token',tracking);
 END $$;
 REVOKE ALL ON FUNCTION private.create_order(jsonb) FROM PUBLIC, anon;
-GRANT EXECUTE ON FUNCTION private.create_order(jsonb) TO authenticated;
+GRANT EXECUTE ON FUNCTION private.create_order(jsonb) TO anon,authenticated;
 CREATE OR REPLACE FUNCTION public.create_order(payload jsonb) RETURNS jsonb
 LANGUAGE sql SECURITY INVOKER SET search_path = '' AS $$ SELECT private.create_order(payload) $$;
 REVOKE ALL ON FUNCTION public.create_order(jsonb) FROM PUBLIC, anon;
-GRANT EXECUTE ON FUNCTION public.create_order(jsonb) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.create_order(jsonb) TO anon,authenticated;
 COMMIT;
