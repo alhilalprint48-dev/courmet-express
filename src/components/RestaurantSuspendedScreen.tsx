@@ -36,11 +36,11 @@ export const RestaurantSuspendedScreen: React.FC<Props> = ({ restaurantName, pho
 
         <div className="pt-4 border-t border-slate-700/80">
           <Link
-            href="/saas"
+            href="/compte"
             className="text-xs text-orange-400 hover:underline flex items-center justify-center gap-1.5"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
-            <span>Découvrir la solution RestoFlow SaaS</span>
+            <span>Mon compte</span>
           </Link>
         </div>
       </div>

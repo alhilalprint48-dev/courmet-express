@@ -1256,56 +1256,6 @@ function AdminPage() {
         {/* TAB 5: ANALYTICS & CAISSE CLOSING */}
         {activeTab === 'analytics' && (
           <div className="space-y-6 max-w-5xl">
-            {/* SaaS Value Proposition Banner */}
-            <div className="bg-gradient-to-r from-emerald-600 to-teal-700 rounded-3xl p-6 text-white shadow-lg flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div className="space-y-1">
-                <div className="inline-flex items-center gap-1.5 bg-white/20 backdrop-blur-md px-3 py-1 rounded-full text-xs font-bold text-emerald-100 mb-1">
-                  <PiggyBank className="w-4 h-4 text-amber-300" />
-                  <span>0% de Commission RestoFlow SaaS</span>
-                </div>
-                <h3 className="text-xl sm:text-2xl font-black tracking-tight">
-                  Vous avez économisé +5 052 DH ce mois-ci !
-                </h3>
-                <p className="text-xs text-emerald-100 max-w-xl">
-                  En recevant vos commandes en direct plutôt que via des applications tierces prélevant 30%, votre abonnement SaaS est déjà rentabilisé à plus de 850%.
-                </p>
-              </div>
-
-              <div className="flex gap-2 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => {
-                    const csvContent = "data:text/csv;charset=utf-8," 
-                      + "Numero,Date,Client,Telephone,Mode,Paiement,Total_DH\n"
-                      + "CMD-1042,2026-10-26,Karim Bennani,0661234567,Livraison,Especes,211\n"
-                      + "CMD-1045,2026-10-26,Sarah Alami,0672889900,A emporter,TPE,90\n"
-                      + "CMD-1048,2026-10-26,Amine Chraibi,0661998877,Livraison,Especes,151\n"
-                      + "CMD-1051,2026-10-26,Nadia Berrada,0650443322,Livraison,Especes,135\n";
-                    const encodedUri = encodeURI(csvContent);
-                    const link = document.createElement("a");
-                    link.setAttribute("href", encodedUri);
-                    link.setAttribute("download", `cloture_caisse_${new Date().toISOString().slice(0,10)}.csv`);
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
-                  }}
-                  className="bg-white/10 hover:bg-white/20 text-white font-bold px-4 py-2.5 rounded-xl text-xs flex items-center gap-1.5 backdrop-blur-sm border border-white/20 transition-all"
-                >
-                  <FileSpreadsheet className="w-4 h-4" />
-                  <span>Export CSV</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => window.print()}
-                  className="bg-white text-emerald-900 hover:bg-emerald-50 font-black px-4 py-2.5 rounded-xl text-xs flex items-center gap-1.5 shadow-md transition-all active:scale-95"
-                >
-                  <Printer className="w-4 h-4 text-emerald-700" />
-                  <span>Imprimer Z de Caisse (80 mm)</span>
-                </button>
-              </div>
-            </div>
-
             {/* Financial Cards Grid */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">

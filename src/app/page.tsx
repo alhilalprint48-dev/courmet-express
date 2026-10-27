@@ -19,7 +19,7 @@ export default function HomePage() {
   const [activeCategory, setActiveCategory] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
 
-  // If this restaurant has been suspended by SaaS Super-Admin
+  // If this restaurant has been suspended by the platform administrator
   if (isRestaurantSuspended) {
     return <RestaurantSuspendedScreen restaurantName={restaurant.name} phone={restaurant.phone} />;
   }

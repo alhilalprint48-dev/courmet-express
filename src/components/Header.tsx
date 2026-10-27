@@ -1,32 +1,34 @@
 'use client';
 
 import React from 'react';
+import Link from 'next/link';
 import { useApp } from '@/context/AppContext';
-import { 
-  ShoppingBag, 
-  MapPin, 
-  Clock, 
-  Languages, 
+import {
+  ShoppingBag,
+  UserRound,
+  MapPin,
+  Clock,
+  Languages,
   Utensils,
   UtensilsCrossed
 } from 'lucide-react';
 
 export const Header: React.FC = () => {
-  const { 
-    language, 
-    setLanguage, 
-    t, 
+  const {
+    language,
+    setLanguage,
+    t,
     restaurant,
     availableRestaurants,
     switchRestaurant,
-    mode, 
+    mode,
     tableNumber,
-    deliveryAddress, 
-    deliveryTimeSlot, 
-    setIsModeModalOpen, 
-    totalItemCount, 
-    total, 
-    setIsCheckoutOpen 
+    deliveryAddress,
+    deliveryTimeSlot,
+    setIsModeModalOpen,
+    totalItemCount,
+    total,
+    setIsCheckoutOpen
   } = useApp();
 
   return (
@@ -94,6 +96,11 @@ export const Header: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-1.5 shrink-0">
+            <Link href="/compte" className="flex items-center gap-1 rounded-xl border border-orange-200 bg-orange-50 text-orange-800 px-2 py-1.5 text-xs font-bold" aria-label={language === 'ar' ? 'حسابي' : 'Mon compte'}>
+              <UserRound className="w-4 h-4 shrink-0" />
+              <span className="hidden min-[380px]:inline">{language === 'ar' ? 'حسابي' : 'Mon compte'}</span>
+            </Link>
+
             <button
               type="button"
               onClick={() => setLanguage(language === 'fr' ? 'ar' : 'fr')}
