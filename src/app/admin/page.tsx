@@ -57,7 +57,7 @@ import { Product, ProductOptionGroup, ProductOption } from '@/types';
 import { StaffAuthGate } from '@/components/StaffAuthGate';
 import { compressAndResizeImage, MAX_IMAGE_SIZE_KB } from '@/lib/imageUtils';
 
-export default function AdminPage() {
+function AdminPage() {
   const { 
     categories, 
     addCategory, 
@@ -67,10 +67,6 @@ export default function AdminPage() {
     addProduct, 
     deleteProduct,
     updateProductOptionGroups,
-    requirePhoneVerification,
-    setRequirePhoneVerification,
-    sharedTeamPin,
-    setSharedTeamPin,
     blacklist,
     addToBlacklist,
     removeFromBlacklist
@@ -174,12 +170,6 @@ export default function AdminPage() {
   const [newBlacklistPhone, setNewBlacklistPhone] = useState('');
 
   // Team Shared Credentials State
-  const [teamPinInput, setTeamPinInput] = useState(sharedTeamPin);
-  const [teamPinSaved, setTeamPinSaved] = useState(false);
-
-  React.useEffect(() => {
-    setTeamPinInput(sharedTeamPin);
-  }, [sharedTeamPin]);
 
   // Add Product Form State
   const [isAddingProduct, setIsAddingProduct] = useState(false);
@@ -326,12 +316,13 @@ export default function AdminPage() {
   const handleAddBlacklist = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newBlacklistPhone) return;
-    await addToBlacklist(newBlacklistPhone);
-    setNewBlacklistPhone('');
+    try { await addToBlacklist(newBlacklistPhone); setNewBlacklistPhone(''); }
+    catch (error) { alert(error instanceof Error ? error.message : 'Ajout refusé.'); }
   };
 
   const handleRemoveBlacklist = async (num: string) => {
-    await removeFromBlacklist(num);
+    try { await removeFromBlacklist(num); }
+    catch (error) { alert(error instanceof Error ? error.message : 'Suppression refusée.'); }
   };
 
   const filteredProducts = products.filter(
@@ -341,7 +332,7 @@ export default function AdminPage() {
   );
 
   return (
-    <StaffAuthGate role="admin" title="Console Gérant & Admin" subtitle="Authentification requise pour gérer la carte, les stocks et les règles anti-fraude">
+    <>
     <div className="min-h-screen bg-slate-50 text-slate-900 font-sans pb-16">
       {/* Admin Top Header */}
       <header className="bg-white border-b border-slate-200 sticky top-0 z-20 shadow-xs">
@@ -1022,54 +1013,7 @@ export default function AdminPage() {
                 <p className="text-[11px] text-slate-400 mt-1">Format international sans le signe + (ex: 212600000000).</p>
               </div>
 
-              {/* Personnel : Accès & Mot de passe partagé de l'équipe */}
-              <div className="pt-4 border-t border-slate-200 space-y-3">
-                <div className="flex items-center gap-2">
-                  <div className="p-2 bg-orange-100 text-orange-700 rounded-xl">
-                    <Users className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <h4 className="font-extrabold text-sm text-slate-900">Personnel & Mot de passe Unique Équipe</h4>
-                    <p className="text-xs text-slate-500">Un seul code partagé pour toute votre équipe (Cuisine, Livreurs, Gérant)</p>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="text-xs font-bold text-slate-700 block mb-1">
-                    Code PIN / Mot de passe partagé de l&apos;équipe
-                  </label>
-                  <div className="flex gap-2 max-w-sm">
-                    <input
-                      type="text"
-                      value={teamPinInput}
-                      onChange={(e) => setTeamPinInput(e.target.value)}
-                      placeholder="1234"
-                      className="flex-1 p-2.5 text-sm border rounded-xl font-mono font-black tracking-wider bg-white"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSharedTeamPin(teamPinInput);
-                        setTeamPinSaved(true);
-                        setTimeout(() => setTeamPinSaved(false), 3000);
-                      }}
-                      className="px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl shadow-xs transition-colors flex items-center gap-1.5"
-                    >
-                      <Save className="w-3.5 h-3.5" />
-                      <span>Enregistrer</span>
-                    </button>
-                  </div>
-                  {teamPinSaved && (
-                    <p className="text-xs font-bold text-emerald-600 mt-2 flex items-center gap-1">
-                      <Check className="w-3.5 h-3.5" />
-                      Code partagé mis à jour avec succès ! Toute l&apos;équipe peut l&apos;utiliser dès maintenant.
-                    </p>
-                  )}
-                  <p className="text-[11px] text-slate-400 mt-1.5">
-                    Ce code unique permet à n&apos;importe quel membre du personnel de déverrouiller l&apos;écran Cuisine (/kds), l&apos;espace Livreur (/livreur) et la console Gérant (/admin).
-                  </p>
-                </div>
-              </div>
+              <p className="text-sm">Chaque membre utilise un compte personnel Supabase Auth. Les droits par restaurant sont attribués par le responsable de la plateforme.</p>
 
               {settingsSaved && (
                 <div className="p-3 bg-emerald-50 text-emerald-700 rounded-xl text-xs font-bold flex items-center gap-2">
@@ -1114,8 +1058,7 @@ export default function AdminPage() {
                 </label>
                 <input
                   type="number"
-                  value={maxCodLimit}
-                  onChange={(e) => setMaxCodLimit(Number(e.target.value))}
+                  value={500} readOnly
                   className="w-full p-2.5 text-sm border rounded-xl max-w-xs"
                 />
                 <p className="text-[11px] text-slate-400 mt-1">
@@ -1123,40 +1066,7 @@ export default function AdminPage() {
                 </p>
               </div>
 
-              <div className="pt-3 border-t border-slate-200">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-start gap-3">
-                    <div className="p-2 bg-emerald-100 text-emerald-700 rounded-xl mt-0.5">
-                      <Smartphone className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <span className="text-xs font-black text-slate-800 block">
-                        Vérification SMS par Code OTP (4 chiffres)
-                      </span>
-                      <span className="text-[11px] text-slate-500 block">
-                        Exiger que chaque client valide un code SMS à 4 chiffres avant de pouvoir confirmer sa commande.
-                      </span>
-                      <span className="text-[10px] font-bold mt-1 block">
-                        {requirePhoneVerification ? (
-                          <span className="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                            ✓ Actif (Protection anti-fraude maximale par SMS)
-                          </span>
-                        ) : (
-                          <span className="text-slate-500 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
-                            ✗ Désactivé (Commande directe sans code SMS)
-                          </span>
-                        )}
-                      </span>
-                    </div>
-                  </div>
-                  <input
-                    type="checkbox"
-                    checked={requirePhoneVerification}
-                    onChange={(e) => setRequirePhoneVerification(e.target.checked)}
-                    className="w-5 h-5 rounded text-orange-600 focus:ring-orange-500 cursor-pointer"
-                  />
-                </div>
-              </div>
+              <p className="text-xs">La vérification SMS est obligatoire et contrôlée en base. Le plafond espèces est fixé à 500 DH en base.</p>
             </div>
 
             {/* Blacklist Management */}
@@ -1672,6 +1582,8 @@ export default function AdminPage() {
         </div>
       )}
     </div>
-    </StaffAuthGate>
+    </>
   );
 }
+
+export default function ProtectedPage() { return <StaffAuthGate role="admin" title="Console Gérant & Admin" subtitle="Authentification requise pour gérer la carte, les stocks et les règles anti-fraude"><AdminPage /></StaffAuthGate>; }

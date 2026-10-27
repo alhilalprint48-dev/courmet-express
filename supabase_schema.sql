@@ -1,3 +1,4 @@
+BEGIN;
 -- ==============================================================================
 -- SCHEMA MULTI-TENANT SAAS POUR FOOD ORDERING & KDS
 -- Projet Supabase : https://xonihnqotjbnirwpajyu.supabase.co
@@ -131,7 +132,12 @@ CREATE TABLE IF NOT EXISTS public.blacklists (
 -- ==============================================================================
 -- TEMPS RÉEL (REALTIME) POUR LE KDS CUISINE ET LES COURSIERS
 -- ==============================================================================
-ALTER PUBLICATION supabase_realtime ADD TABLE public.orders;
+DO $$ BEGIN
+ IF EXISTS(SELECT 1 FROM pg_publication WHERE pubname='supabase_realtime') AND NOT EXISTS(
+ SELECT 1 FROM pg_publication_tables WHERE pubname='supabase_realtime' AND schemaname='public' AND tablename='orders') THEN
+  ALTER PUBLICATION supabase_realtime ADD TABLE public.orders;
+ END IF;
+END $$;
 
 -- ==============================================================================
 -- INSERTION DU PREMIER RESTAURANT (LE GOURMET EXPRESS) POUR TESTS IMMÉDIATS
@@ -147,3 +153,14 @@ VALUES (
     15.00,
     50.00
 ) ON CONFLICT (slug) DO NOTHING;
+
+-- Fail closed on fresh installations, before the explicit policies are applied.
+ALTER TABLE public.restaurants ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.categories ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.products ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.product_option_groups ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.product_options ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.orders ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.order_items ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.blacklists ENABLE ROW LEVEL SECURITY;
+COMMIT;

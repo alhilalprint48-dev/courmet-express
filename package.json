@@ -6,10 +6,12 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test:security": "node tests/security.mjs",
+    "audit:anonymous": "node src/scripts/audit-test.mjs"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.118.0",
+    "@supabase/supabase-js": "2.118.0",
     "clsx": "^2.1.1",
     "lucide-react": "^0.475.0",
     "next": "^14.2.24",
@@ -19,6 +21,7 @@
     "tailwind-merge": "^2.6.0"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "0.5.12",
     "@types/node": "^20",
     "@types/qrcode": "^1.5.6",
     "@types/react": "^18",

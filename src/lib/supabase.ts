@@ -1,6 +1,9 @@
 import { createClient } from '@supabase/supabase-js';
 
-export const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://xonihnqotjbnirwpajyu.supabase.co';
-export const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'sb_publishable_Y9bA01yHf430LRCfQhzD9g_08kG8bN2';
+export const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+export const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+if (!supabaseUrl || !supabaseAnonKey) throw new Error('Configuration Supabase manquante.');
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: { persistSession: true, storage: typeof window !== 'undefined' ? window.sessionStorage : undefined },
+});
