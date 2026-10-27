@@ -45,7 +45,8 @@ export const CheckoutModal: React.FC = () => {
     placeOrder, 
     language, 
     t,
-    blacklist
+    blacklist,
+    requirePhoneVerification
   } = useApp();
 
   const [fullName, setFullName] = useState('');
@@ -188,6 +189,16 @@ export const CheckoutModal: React.FC = () => {
           language === 'ar'
             ? 'يرجى إدخال رقم هاتف صحيح مكون من 8 أرقام على الأقل'
             : 'Veuillez saisir un numéro de téléphone valide.'
+        );
+        return;
+      }
+
+      // Phone verification check (si configuré actif dans l'Admin)
+      if (requirePhoneVerification && !isPhoneVerified) {
+        setErrorMessage(
+          language === 'ar'
+            ? 'يرجى تأكيد رقم الهاتف عبر رمز التحقق SMS أولاً.'
+            : 'Veuillez valider le code SMS reçu sur votre numéro avant de confirmer la commande.'
         );
         return;
       }
@@ -466,7 +477,7 @@ export const CheckoutModal: React.FC = () => {
                           <Phone className="w-3.5 h-3.5 text-primary-600" />
                           {t.checkout.phone} *
                         </label>
-                        {isPhoneVerified && (
+                        {requirePhoneVerification && isPhoneVerified && (
                           <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
                             ✓ Numéro Vérifié
                           </span>
@@ -485,7 +496,7 @@ export const CheckoutModal: React.FC = () => {
                           placeholder={t.checkout.phonePlaceholder}
                           className="flex-1 px-3 py-2 rounded-xl border border-gray-200 text-sm focus:ring-2 focus:ring-primary-500 outline-none"
                         />
-                        {!isPhoneVerified && (
+                        {requirePhoneVerification && !isPhoneVerified && (
                           <button
                             type="button"
                             onClick={handleSendOtp}

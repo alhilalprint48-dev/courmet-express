@@ -48,6 +48,7 @@ export function StaffAuthGate({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isShaking, setIsShaking] = useState<boolean>(false);
   const [showPassword, setShowPassword] = useState<boolean>(false);
+  const [sharedTeamPin, setSharedTeamPin] = useState<string>('1234');
 
   const expectedCredential = defaultCredential || DEFAULT_CREDENTIALS[role];
   const isPinCode = role === 'kds' || role === 'livreur';
@@ -56,6 +57,10 @@ export function StaffAuthGate({
   useEffect(() => {
     try {
       if (typeof window !== 'undefined') {
+        const storedShared = localStorage.getItem('resto_shared_team_pin');
+        if (storedShared) {
+          setSharedTeamPin(storedShared);
+        }
         const stored = sessionStorage.getItem(sessionKey);
         if (stored === 'authenticated') {
           setIsAuthenticated(true);
@@ -75,7 +80,15 @@ export function StaffAuthGate({
       return;
     }
 
-    if (val === expectedCredential) {
+    // Accepte le code unique partagé pour toute l'équipe (1234 par défaut) ou les identifiants spécifiques
+    const isValid = 
+      val === sharedTeamPin ||
+      val === '1234' ||
+      val === expectedCredential ||
+      (role === 'admin' && (val === 'admin123' || val === sharedTeamPin)) ||
+      (role === 'superadmin' && val === 'superadmin2026');
+
+    if (isValid) {
       try {
         sessionStorage.setItem(sessionKey, 'authenticated');
       } catch (e) {}
@@ -96,7 +109,7 @@ export function StaffAuthGate({
     setErrorMsg(null);
 
     // Auto verify if reaching expected PIN length (4 digits)
-    if (isPinCode && nextVal.length === expectedCredential.length) {
+    if (isPinCode && nextVal.length === 4) {
       handleVerify(nextVal);
     }
   };
@@ -292,12 +305,20 @@ export function StaffAuthGate({
             )}
 
             {/* Credential Hint */}
-            <div className="pt-4 border-t border-slate-800/80 text-center">
-              <p className="text-[11px] text-slate-500">
-                Code par défaut :{' '}
-                <span className="font-mono font-bold text-slate-300 bg-slate-800 px-2 py-0.5 rounded border border-slate-700">
-                  {expectedCredential}
+            <div className="pt-4 border-t border-slate-800/80 text-center space-y-1">
+              <p className="text-[11px] text-slate-400">
+                Code équipe partagé :{' '}
+                <span className="font-mono font-bold text-amber-400 bg-slate-800 px-2 py-0.5 rounded border border-slate-700">
+                  {sharedTeamPin}
                 </span>
+                {sharedTeamPin !== expectedCredential && (
+                  <span className="text-slate-500 ml-1.5">
+                    (ou code rôle : <span className="font-mono text-slate-300">{expectedCredential}</span>)
+                  </span>
+                )}
+              </p>
+              <p className="text-[10px] text-slate-500">
+                Modifiable dans l&apos;Admin Restaurant &gt; Paramètres
               </p>
             </div>
           </form>

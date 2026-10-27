@@ -7,6 +7,7 @@ import {
   CartItem, 
   Product, 
   Category,
+  ProductOptionGroup,
   SelectedOptionChoice, 
   Order, 
   CustomerDetails 
@@ -51,6 +52,13 @@ interface AppContextType {
   toggleProductAvailability: (productId: string) => Promise<void>;
   addProduct: (product: Omit<Product, 'id'>) => Promise<Product>;
   deleteProduct: (productId: string) => Promise<void>;
+  updateProductOptionGroups: (productId: string, groups: ProductOptionGroup[]) => Promise<void>;
+
+  // Anti-fraud & Security Settings
+  requirePhoneVerification: boolean;
+  setRequirePhoneVerification: (enabled: boolean) => void;
+  sharedTeamPin: string;
+  setSharedTeamPin: (pin: string) => void;
 
   // Anti-fraud Blacklist
   blacklist: string[];
@@ -136,6 +144,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   // Anti-fraud Blacklist state (synchronized with localStorage and Supabase)
   const [blacklist, setBlacklist] = useState<string[]>(['0612000000', '0699112233', '0600000000']);
+  
+  // Security & Staff Credentials
+  const [requirePhoneVerification, setRequirePhoneVerificationState] = useState<boolean>(true);
+  const [sharedTeamPin, setSharedTeamPinState] = useState<string>('1234');
 
   useEffect(() => {
     try {
@@ -144,9 +156,32 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         if (saved) {
           setBlacklist(JSON.parse(saved));
         }
+        const savedOtpReq = localStorage.getItem('resto_require_phone_verification');
+        if (savedOtpReq !== null) {
+          setRequirePhoneVerificationState(savedOtpReq === 'true');
+        }
+        const savedTeamPin = localStorage.getItem('resto_shared_team_pin');
+        if (savedTeamPin) {
+          setSharedTeamPinState(savedTeamPin);
+        }
       }
     } catch (e) {}
   }, []);
+
+  const setRequirePhoneVerification = (enabled: boolean) => {
+    setRequirePhoneVerificationState(enabled);
+    try {
+      localStorage.setItem('resto_require_phone_verification', String(enabled));
+    } catch (e) {}
+  };
+
+  const setSharedTeamPin = (pin: string) => {
+    const clean = pin.trim() || '1234';
+    setSharedTeamPinState(clean);
+    try {
+      localStorage.setItem('resto_shared_team_pin', clean);
+    } catch (e) {}
+  };
 
   const addToBlacklist = async (phone: string) => {
     const clean = phone.replace(/\s+/g, '');
@@ -255,16 +290,37 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         .eq('restaurant_id', restoData.id);
 
       if (prodsData && prodsData.length > 0) {
-        const formatted: Product[] = prodsData.map(p => ({
-          id: p.id,
-          categoryId: p.category_id || 'burgers',
-          name: { fr: p.name_fr, ar: p.name_ar || p.name_fr },
-          description: { fr: p.description_fr || '', ar: p.description_ar || '' },
-          price: Number(p.price),
-          image: p.image || 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=800&q=80',
-          allergens: p.allergens || [],
-          isAvailable: p.is_available,
-        }));
+        const formatted: Product[] = prodsData.map(p => {
+          let optionGroups = p.option_groups;
+          if (!optionGroups && typeof window !== 'undefined') {
+            try {
+              const saved = localStorage.getItem('resto_prod_options_' + p.id);
+              if (saved) {
+                optionGroups = JSON.parse(saved);
+              }
+            } catch (e) {}
+          }
+          if (!optionGroups || optionGroups.length === 0) {
+            const fallbackMatch = FALLBACK_PRODUCTS.find(
+              fb => fb.name.fr.toLowerCase() === (p.name_fr || '').toLowerCase() || fb.id === p.id
+            );
+            if (fallbackMatch?.optionGroups) {
+              optionGroups = fallbackMatch.optionGroups;
+            }
+          }
+
+          return {
+            id: p.id,
+            categoryId: p.category_id || 'burgers',
+            name: { fr: p.name_fr, ar: p.name_ar || p.name_fr },
+            description: { fr: p.description_fr || '', ar: p.description_ar || '' },
+            price: Number(p.price),
+            image: p.image || 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=800&q=80',
+            allergens: p.allergens || [],
+            isAvailable: p.is_available,
+            optionGroups: optionGroups || [],
+          };
+        });
         setProducts(formatted);
       }
       setIsLoadingProducts(false);
@@ -548,14 +604,35 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
           image: data.image || newProd.image,
           allergens: data.allergens || [],
           isAvailable: data.is_available,
+          optionGroups: newProd.optionGroups || [],
         };
       }
     } catch (e) {
       console.warn("Error inserting product in Supabase:", e);
     }
 
+    if (typeof window !== 'undefined' && newProd.optionGroups && newProd.optionGroups.length > 0) {
+      try {
+        localStorage.setItem('resto_prod_options_' + createdProd.id, JSON.stringify(newProd.optionGroups));
+      } catch (e) {}
+    }
+
     setProducts((prev) => [createdProd, ...prev]);
     return createdProd;
+  };
+
+  const updateProductOptionGroups = async (productId: string, groups: ProductOptionGroup[]) => {
+    setProducts((prev) =>
+      prev.map((p) => (p.id === productId ? { ...p, optionGroups: groups } : p))
+    );
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('resto_prod_options_' + productId, JSON.stringify(groups));
+      } catch (e) {}
+    }
+    try {
+      await supabase.from('products').update({ option_groups: groups } as any).eq('id', productId);
+    } catch (e) {}
   };
 
   const deleteProduct = async (productId: string) => {
@@ -624,6 +701,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         toggleProductAvailability,
         addProduct,
         deleteProduct,
+        updateProductOptionGroups,
+        requirePhoneVerification,
+        setRequirePhoneVerification,
+        sharedTeamPin,
+        setSharedTeamPin,
         blacklist,
         addToBlacklist,
         removeFromBlacklist,

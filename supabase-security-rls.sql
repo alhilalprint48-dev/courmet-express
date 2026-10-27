@@ -17,7 +17,10 @@ CREATE TABLE IF NOT EXISTS public.blacklist (
 -- Index pour recherche rapide au moment de la commande
 CREATE INDEX IF NOT EXISTS idx_blacklist_phone ON public.blacklist(phone);
 
--- 2. Activation du ROW LEVEL SECURITY (RLS) sur TOUTES les tables
+-- 2. Colonne JSONB pour les Options de Plats (Cuisson, Sauces, Suppléments gérés dans l'Admin)
+ALTER TABLE public.products ADD COLUMN IF NOT EXISTS option_groups JSONB DEFAULT '[]'::jsonb;
+
+-- 3. Activation du ROW LEVEL SECURITY (RLS) sur TOUTES les tables
 ALTER TABLE public.restaurants ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.categories ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.products ENABLE ROW LEVEL SECURITY;
