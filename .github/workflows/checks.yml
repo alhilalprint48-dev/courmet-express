@@ -28,8 +28,18 @@ jobs:
           docker run --rm courmet-check nginx -t
           docker run -d --name courmet-check -p 127.0.0.1:3000:3000 courmet-check
           curl --retry 8 --retry-all-errors --retry-delay 1 --retry-connrefused --fail --silent --show-error -D /tmp/headers http://127.0.0.1:3000/ -o /dev/null
-          rg -qi '^X-Frame-Options: DENY' /tmp/headers
-          rg -qi '^X-Content-Type-Options: nosniff' /tmp/headers
-          rg -qi '^Content-Security-Policy:.*frame-ancestors' /tmp/headers
+          grep -Eqi '^X-Frame-Options: DENY' /tmp/headers
+          grep -Eqi '^X-Content-Type-Options: nosniff' /tmp/headers
+          grep -Eqi '^Content-Security-Policy:.*frame-ancestors' /tmp/headers
       - if: always()
         run: docker rm -f courmet-check || true
+  dependency-audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm audit --omit=dev --audit-level=high
