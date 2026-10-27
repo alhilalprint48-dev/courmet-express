@@ -18,7 +18,9 @@ import {
   CreditCard,
   AlertTriangle,
   UtensilsCrossed,
-  Trash2
+  Trash2,
+  RotateCcw,
+  History
 } from 'lucide-react';
 import { Order, OrderStatus } from '@/types';
 import { RESTAURANT_INFO } from '@/data/mockData';
@@ -127,6 +129,7 @@ const INITIAL_ORDERS: Order[] = [
 
 export default function KdsPage() {
   const [orders, setOrders] = useState<Order[]>([]);
+  const [kdsTab, setKdsTab] = useState<'active' | 'completed'>('active');
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [selectedTicketOrder, setSelectedTicketOrder] = useState<Order | null>(null);
   const [ticketType, setTicketType] = useState<'kitchen' | 'delivery'>('kitchen');
@@ -499,15 +502,6 @@ export default function KdsPage() {
           </button>
 
           <button
-            onClick={clearDeliveredOrders}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-red-950/40 text-slate-400 hover:text-red-300 border border-slate-700 text-xs font-bold transition-colors"
-            title="Supprimer les commandes terminées / archivées"
-          >
-            <Trash2 className="w-3.5 h-3.5" />
-            <span>Purger terminées</span>
-          </button>
-
-          <button
             onClick={playAlertSound}
             className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-300 border border-slate-700"
           >
@@ -516,9 +510,100 @@ export default function KdsPage() {
         </div>
       </div>
 
-      {/* Orders Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pt-6 flex-1">
-        {orders.map((order) => {
+      {/* Filter Tabs: En Cuisine vs Terminées */}
+      {(() => {
+        const activeOrders = orders.filter((o) => o.status !== 'delivered' && o.status !== 'cancelled');
+        const completedOrders = orders.filter((o) => o.status === 'delivered');
+        const displayedOrders = kdsTab === 'active' ? activeOrders : completedOrders;
+
+        return (
+          <>
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-4 pb-2 border-b border-slate-800/80">
+              <div className="flex gap-2">
+                {/* Tab 1: Active orders */}
+                <button
+                  type="button"
+                  onClick={() => setKdsTab('active')}
+                  className={`flex items-center gap-2.5 px-4 py-2.5 rounded-xl text-xs font-black transition-all ${
+                    kdsTab === 'active'
+                      ? 'bg-orange-600 text-white shadow-lg shadow-orange-600/30'
+                      : 'bg-slate-800/90 text-slate-400 hover:text-white hover:bg-slate-800'
+                  }`}
+                >
+                  <ChefHat className="w-4 h-4" />
+                  <span>En Cuisine / À Préparer</span>
+                  <span
+                    className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                      kdsTab === 'active' ? 'bg-orange-800 text-white' : 'bg-slate-700 text-slate-300'
+                    }`}
+                  >
+                    {activeOrders.length}
+                  </span>
+                </button>
+
+                {/* Tab 2: Completed / Served orders */}
+                <button
+                  type="button"
+                  onClick={() => setKdsTab('completed')}
+                  className={`flex items-center gap-2.5 px-4 py-2.5 rounded-xl text-xs font-black transition-all ${
+                    kdsTab === 'completed'
+                      ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/30'
+                      : 'bg-slate-800/90 text-slate-400 hover:text-white hover:bg-slate-800'
+                  }`}
+                >
+                  <CheckCircle className="w-4 h-4" />
+                  <span>Commandes Terminées</span>
+                  <span
+                    className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
+                      kdsTab === 'completed' ? 'bg-emerald-800 text-white' : 'bg-slate-700 text-slate-300'
+                    }`}
+                  >
+                    {completedOrders.length}
+                  </span>
+                </button>
+              </div>
+
+              {/* Action on completed tab: Purge history */}
+              {kdsTab === 'completed' && completedOrders.length > 0 && (
+                <button
+                  type="button"
+                  onClick={clearDeliveredOrders}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-950/40 hover:bg-red-900/60 text-red-300 border border-red-800/50 text-xs font-bold transition-colors"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Purger tout l&apos;historique ({completedOrders.length})</span>
+                </button>
+              )}
+            </div>
+
+            {/* Orders Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pt-6 flex-1">
+              {displayedOrders.length === 0 ? (
+                <div className="col-span-full py-16 text-center bg-slate-800/40 border border-slate-700/60 rounded-3xl p-8">
+                  {kdsTab === 'active' ? (
+                    <>
+                      <div className="w-14 h-14 bg-emerald-500/10 text-emerald-400 rounded-full flex items-center justify-center mx-auto mb-3">
+                        <CheckCircle className="w-7 h-7" />
+                      </div>
+                      <h3 className="text-lg font-black text-white">Toutes les commandes sont prêtes et servies !</h3>
+                      <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
+                        La cuisine est à jour. Les nouvelles commandes apparaîtront ici automatiquement dès validation par les clients.
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <div className="w-14 h-14 bg-slate-700/50 text-slate-400 rounded-full flex items-center justify-center mx-auto mb-3">
+                        <History className="w-7 h-7" />
+                      </div>
+                      <h3 className="text-lg font-black text-white">Aucune commande terminée dans l&apos;historique</h3>
+                      <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
+                        Dès qu&apos;une commande sur place est marquée &quot;Servie à table&quot; ou qu&apos;une livraison est clôturée, elle sera automatiquement déplacée ici.
+                      </p>
+                    </>
+                  )}
+                </div>
+              ) : (
+                displayedOrders.map((order) => {
           const isNew = order.status === 'new';
           return (
             <div
@@ -716,15 +801,30 @@ export default function KdsPage() {
                 )}
 
                 {order.status === 'delivered' && (
-                  <div className="text-center text-xs text-emerald-400 font-bold py-1">
-                    ✓ {order.mode === 'dine_in' ? 'Commande servie à table et archivée' : order.mode === 'takeaway' ? 'Commande remise au client et archivée' : 'Commande livrée et archivée'}
+                  <div className="space-y-2">
+                    <div className="text-center text-xs text-emerald-400 font-bold py-1 bg-emerald-950/40 rounded-xl border border-emerald-800/40">
+                      ✓ {order.mode === 'dine_in' ? 'Commande servie à table et archivée' : order.mode === 'takeaway' ? 'Commande remise au client et archivée' : 'Commande livrée et archivée'}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => updateOrderStatus(order.id, 'preparing')}
+                      className="w-full bg-slate-700/80 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-bold py-1.5 rounded-xl transition-colors flex items-center justify-center gap-1.5"
+                      title="Remettre cette commande en cuisine si erreur"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" />
+                      <span>Remettre en cuisine</span>
+                    </button>
                   </div>
                 )}
               </div>
             </div>
           );
-        })}
-      </div>
+        })
+      )}
+            </div>
+          </>
+        );
+      })()}
 
       {/* Hidden Thermal Printable Section (ESC/POS 80mm format) */}
       {selectedTicketOrder && (
