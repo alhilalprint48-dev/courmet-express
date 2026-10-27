@@ -4,9 +4,7 @@ Base examinée : `a8c97e59291f03f4cde7ecfaaa654c07a970ad77` (branche main).
 
 ## État de livraison
 
-GitHub et le projet Supabase du restaurant sont désormais accessibles. L’audit distant a confirmé huit tables sans RLS, aucun utilisateur Auth et Phone Auth désactivé. Le compte Cloudflare accessible dans cette session est différent du compte qui héberge ce site ; la configuration et le déploiement Pages restent à vérifier sur le bon compte. Aucune clé n’a été révoquée et aucun SMS réel n’a été envoyé durant les tests.
-
-La protection SQL peut être installée indépendamment : elle bloque les anciens codes et les écritures directes de l’ancien site. La prise de commande nécessite ensuite la version corrigée et la configuration SMS.
+Ce document décrit les changements de code et la procédure de mise en service. Il ne publie aucun état de base distante, compte utilisateur ou configuration d’hébergement. Vérifier les prérequis ci-dessous avant d’appliquer les restrictions et de déployer l’interface.
 
 ## Changements
 
@@ -25,7 +23,7 @@ La protection SQL peut être installée indépendamment : elle bloque les ancien
 1. Prévoir une maintenance et sauvegarder la base. Les anciens écrans ne sont pas compatibles avec les nouvelles restrictions. Éviter de laisser l'ancien site accepter des commandes pendant l'installation.
 2. Appliquer le patch au commit examiné : `git apply --check courmet-express-security.patch`, puis `git apply courmet-express-security.patch`. Si main a évolué, revoir les conflits avant application. Tous les fichiers modifiés et les tests sont inclus dans le patch.
 3. Sur une installation existante, exécuter **supabase-security-rls.sql**, en entier, dans l'éditeur SQL du bon projet comme propriétaire de la base. Sur une installation neuve, exécuter d'abord **supabase_schema.sql** puis le script de sécurité. L'ancien schéma neuf active désormais RLS avant de terminer. Les anciennes commandes sans customer_user_id restent réservées au personnel autorisé : ne pas en attribuer la propriété à partir d'un numéro fourni par le navigateur.
-4. Pour le premier propriétaire, une réservation privée d’adresse peut être placée dans `private.bootstrap_admin_emails` par le propriétaire de la base. Depuis l’écran de connexion, « Créer mon accès personnel » permet de choisir son mot de passe ; l’adresse doit être confirmée par e-mail. Au premier accès confirmé, la réservation est consommée et le rôle est attaché à l’UUID utilisateur. Garder la confirmation e-mail activée (mailer_autoconfirm=false), vérifiée lors de l’audit. Aucun e-mail n’est envoyé par les opérations de migration.
+4. Pour le premier propriétaire, une réservation privée d’adresse peut être placée dans `private.bootstrap_admin_emails` par le propriétaire de la base. Depuis l’écran de connexion, « Créer mon accès personnel » permet de choisir son mot de passe ; l’adresse doit être confirmée par e-mail. Au premier accès confirmé, la réservation est consommée et le rôle est attaché à l’UUID utilisateur. Garder la confirmation e-mail activée (mailer_autoconfirm=false). Aucun e-mail n’est envoyé par les opérations de migration.
 
 Créer/inviter chaque autre membre du personnel dans Supabase Auth. Attribuer les accès par leur UUID depuis l'éditeur SQL, avec les valeurs réelles :
 
