@@ -146,8 +146,6 @@ function SuperAdminPage() {
   const totalCount = restaurants.length;
   const activeCount = restaurants.filter(r => r.is_active).length;
   const suspendedCount = totalCount - activeCount;
-  // Estimated MRR assuming average 590 DH / month per active restaurant
-  const estimatedMrr = activeCount * 590;
 
   const filtered = restaurants.filter(r =>
     r.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -163,9 +161,9 @@ function SuperAdminPage() {
         <div className="max-w-6xl mx-auto px-4 py-3.5 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Link
-              href="/saas"
+              href="/compte"
               className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors"
-              title="Retour à la vitrine SaaS"
+              title="Mon compte"
             >
               <ArrowLeft className="w-4 h-4" />
             </Link>
@@ -175,12 +173,12 @@ function SuperAdminPage() {
               </div>
               <div>
                 <h1 className="text-base sm:text-lg font-black tracking-tight leading-none flex items-center gap-2">
-                  <span>Portail Super-Admin SaaS</span>
+                  <span>Gestion des établissements</span>
                   <span className="text-[10px] bg-purple-500/20 text-purple-300 border border-purple-500/30 font-bold px-2 py-0.5 rounded-full">
                     Fondateur
                   </span>
                 </h1>
-                <p className="text-xs text-slate-400 mt-0.5">Pilotage des restaurants clients & Abonnements récurrents</p>
+                <p className="text-xs text-slate-400 mt-0.5">Gestion des restaurants et de leur disponibilité</p>
               </div>
             </div>
           </div>
@@ -207,19 +205,7 @@ function SuperAdminPage() {
       {/* Main Container */}
       <main className="max-w-6xl mx-auto px-4 py-6 space-y-6">
         {/* KPI Cards / Business Metrics */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
-          {/* Card 1: MRR */}
-          <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl relative overflow-hidden">
-            <div className="flex items-center justify-between text-slate-400 mb-2">
-              <span className="text-xs font-bold uppercase tracking-wider">Revenu Mensuel (MRR)</span>
-              <DollarSign className="w-4 h-4 text-emerald-400" />
-            </div>
-            <div className="text-xl sm:text-2xl font-black text-emerald-400">
-              {estimatedMrr.toLocaleString()} <span className="text-xs font-bold text-slate-400">DH/mois</span>
-            </div>
-            <span className="text-[10px] text-slate-500 mt-1 block">Sur base moyenne de 590 DH/client</span>
-          </div>
-
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
           {/* Card 2: Total Restaurants */}
           <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl">
             <div className="flex items-center justify-between text-slate-400 mb-2">
@@ -235,13 +221,13 @@ function SuperAdminPage() {
           {/* Card 3: Active Subscriptions */}
           <div className="bg-slate-900 border border-slate-800 p-4 rounded-2xl">
             <div className="flex items-center justify-between text-slate-400 mb-2">
-              <span className="text-xs font-bold uppercase tracking-wider">Abonnements Actifs</span>
+              <span className="text-xs font-bold uppercase tracking-wider">Établissements ouverts</span>
               <CheckCircle className="w-4 h-4 text-emerald-400" />
             </div>
             <div className="text-xl sm:text-2xl font-black text-emerald-400">
               {activeCount}
             </div>
-            <span className="text-[10px] text-emerald-500/80 mt-1 block">Génèrent des revenus</span>
+            <span className="text-[10px] text-emerald-500/80 mt-1 block">Commandes en ligne activées</span>
           </div>
 
           {/* Card 4: Suspended / Churn */}
@@ -449,4 +435,4 @@ function SuperAdminPage() {
   );
 }
 
-export default function ProtectedPage() { return <StaffAuthGate role="superadmin" title="Console SaaS Super-Admin" subtitle="Authentification requise pour administrer les restaurants partenaires"><SuperAdminPage /></StaffAuthGate>; }
+export default function ProtectedPage() { return <StaffAuthGate role="superadmin" title="Administration des établissements" subtitle="Authentification requise pour administrer les restaurants partenaires"><SuperAdminPage /></StaffAuthGate>; }

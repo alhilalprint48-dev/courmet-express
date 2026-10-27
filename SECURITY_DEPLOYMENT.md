@@ -50,7 +50,7 @@ ON CONFLICT DO NOTHING;
 
 `npm run test:security` exécute de vrais privilèges, politiques RLS et fonctions PostgreSQL dans une base isolée PGlite. Seule l'identité Auth est simulée par un stub de auth.uid() et une table auth.users minimale. Le schéma est celui du dépôt ; l'extension UUID est remplacée par gen_random_uuid() pour le moteur de test. Aucun accès aux données clients de production.
 
-74 contrôles SQL passent. Les tests vérifient aussi la réservation initiale du propriétaire, le refus d’une adresse non confirmée, le refus d’un autre compte et la consommation unique de la réservation. Les tests couvrent la lecture anonyme, les écritures directes, la propriété des commandes, les rôles, les prix falsifiés, les options inconnues/dupliquées/obligatoires, les quantités, le plafond, les téléphones invalides, les commandes sans téléphone à table et le suivi par secret, le restaurant suspendu, les deux listes noires, le délai et le rollback intégral en cas d'échec d'une ligne.
+92 contrôles SQL passent. Les tests vérifient aussi la réservation initiale du propriétaire, le refus d’une adresse non confirmée, le refus d’un autre compte et la consommation unique de la réservation. Les tests couvrent la lecture anonyme, les écritures directes, la propriété des commandes, les rôles, les prix falsifiés, les options inconnues/dupliquées/obligatoires, les quantités, le plafond, les téléphones invalides, les commandes sans téléphone à table et le suivi par secret, le restaurant suspendu, les deux listes noires, le délai et le rollback intégral en cas d'échec d'une ligne.
 
 La compilation statique et TypeScript sont vérifiés localement avec une configuration Supabase factice. Le dépôt ne contient pas ESLint ; Next signale son absence pendant la compilation. Les tests ne prouvent pas l'état de la base distante, les réglages Auth/WhatsApp, les règles Storage, les anciennes API déployées ou les autres fonctions/vues absentes du dépôt. La validation de production reste à effectuer après installation. Aucun test d'envoi WhatsApp, de fournisseur de paiement, d'imprimante physique ou d'image Docker n'est revendiqué.
 
@@ -61,3 +61,15 @@ Le contrôle visuel automatisé n’a pas pu être exécuté : Chromium est abse
 Aucun fournisseur SMS, Twilio ou API WhatsApp requis. Le client envoie lui-même le message prérempli au numéro WhatsApp configuré du restaurant. Le personnel vérifie la réception et le numéro de commande avant d'accepter une livraison ou un retrait. Un lien ouvert ne constitue pas une preuve d'envoi.
 
 Appliquer `supabase-guest-checkout.sql` sur une installation sécurisée existante avant de déployer ce parcours. Pour une nouvelle installation, `supabase-security-rls.sql` intègre déjà cette évolution. Les anciens codes OTP ne sont plus utilisés au checkout. Les comptes du personnel restent protégés par Supabase Auth et les rôles en base.
+
+## Comptes et fidélité
+
+Appliquer `supabase-customer-loyalty.sql` après les scripts de sécurité et de commande invitée. Le script est réexécutable et ne crédite pas les commandes historiques. La table privée conserve le crédit même si le personnel efface les commandes terminées ; une réouverture ou annulation retire le crédit. Un retour au statut terminé le restaure sans doublon. Aucun droit de modifier les points n'est accordé aux clients.
+
+Le bouton `/compte` est commun aux clients et au personnel. L'inscription crée uniquement un utilisateur Auth ; seuls les rôles en base ouvrent les espaces administration, cuisine et livraison. Les administrateurs peuvent ouvrir ces trois espaces. Les accès limités cuisine/livraison restent limités à leur rôle. Les nouveaux comptes clients doivent confirmer leur e-mail.
+
+Règle initiale : 1 point par tranche entière de 10 DH de produits, hors livraison, pour une commande terminée associée à un compte dont l'e-mail est confirmé. Aucun crédit invité ou rétroactif, aucune remise automatique ni conversion monétaire. Les points sont calculés par un trigger sur le sous-total canonique en base.
+
+Configurer Supabase Auth : Site URL = URL du site publié ; autoriser exactement l'URL `/compte` du site dans Redirect URLs. Le client fournit `emailRedirectTo` à l'inscription et au renvoi du lien. Configurer un SMTP permettant les inscriptions publiques : le service e-mail intégré Supabase peut limiter les destinataires aux membres de l'organisation. Ne pas désactiver la confirmation e-mail pour contourner un problème d'envoi. Les tests n'envoient aucun e-mail et ne créent aucun utilisateur réel.
+
+La vitrine `/saas` et ses liens sont retirés de l'export ; la gestion protégée des établissements reste disponible pour le responsable depuis Mon compte.

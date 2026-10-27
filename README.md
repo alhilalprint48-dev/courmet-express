@@ -82,3 +82,9 @@ Pour déployer sur un serveur VPS (Ubuntu / Debian / Cloudflare) :
 docker compose up -d --build
 ```
 L'application démarre automatiquement sur le port `3000` avec redémarrage automatique en cas de panne (`restart: always`).
+
+### Mon compte et fidélité
+
+Le bouton **Mon compte** permet aux clients de s'inscrire et de consulter leurs points et commandes. Les membres du personnel se connectent au même endroit et voient uniquement les accès permis par leur rôle en base. L'administration donne accès à la cuisine, aux livreurs et à la gestion du restaurant.
+
+Installer `supabase-customer-loyalty.sql` après les scripts de sécurité. Un client connecté avec e-mail confirmé gagne 1 point par tranche de 10 DH de produits après clôture de la commande. Les frais de livraison sont exclus. Aucun point invité ou rétroactif ; aucune remise automatique. Vérifier le SMTP, la Site URL et les Redirect URLs Supabase avant d'ouvrir l'inscription publique. La vitrine SaaS est retirée pour le moment.

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
+import Link from 'next/link';
 import { useApp } from '@/context/AppContext';
 import { 
   X, 
@@ -460,6 +461,11 @@ export const CheckoutModal: React.FC = () => {
                   </p>
                 </div>
               )}
+
+              <p className="rounded-xl bg-orange-50 border border-orange-100 p-3 text-xs text-orange-900">
+                {language === 'ar' ? 'باش تجمع نقاط الوفاء، دخل لحسابك قبل ما تأكد الطلب.' : 'Pour cumuler des points de fidélité, connectez-vous avant de confirmer la commande.'}{' '}
+                <Link href="/compte" className="font-bold underline" onClick={() => setIsCheckoutOpen(false)}>{language === 'ar' ? 'حسابي' : 'Mon compte'}</Link>
+              </p>
 
               {/* Payment Method Selector (Default: Pay on Delivery) */}
               <div className="space-y-2 pt-2">
