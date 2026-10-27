@@ -27,7 +27,7 @@ Système de commande en ligne pour restaurant, Click & Collect et livraison à d
 
 ## 💻 Démarrage Rapide
 
-Voir [SECURITY_DEPLOYMENT.md](SECURITY_DEPLOYMENT.md) avant toute mise en production : installation SQL, comptes et fournisseur SMS obligatoires.
+Voir [SECURITY_DEPLOYMENT.md](SECURITY_DEPLOYMENT.md) avant toute mise en production : installation SQL, comptes et fournisseur WhatsApp obligatoires.
 
 ### 1. Installation
 ```bash
@@ -69,7 +69,7 @@ L'impression est disponible sous deux formats :
 
 Pour réduire les risques de fausses commandes en paiement à la livraison :
 - **Blacklist Automatique** : Blocage immédiat des numéros de téléphone ayant fait l'objet d'un refus de livraison abusif (géré dans `/admin`).
-- **Validation OTP SMS** : Bouton d'envoi de code de vérification envoyé par Supabase Auth lors de la saisie du numéro.
+- **Validation OTP WhatsApp** : Bouton d'envoi de code de vérification envoyé par Supabase Auth lors de la saisie du numéro.
 - **Plafonnement des montants** : Limite fixée par défaut à 500 DH pour toute commande sans acompte préalable.
 
 ---

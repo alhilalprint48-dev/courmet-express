@@ -106,7 +106,7 @@ BEGIN
  SELECT u.phone INTO phone FROM auth.users u WHERE u.id=uid AND u.phone_confirmed_at IS NOT NULL;
  normalized:=regexp_replace(coalesce(customer->>'phone',''),'[^0-9]','','g');
  IF normalized ~ '^0[67][0-9]{8}$' THEN normalized:='212'||substr(normalized,2); END IF;
- IF phone IS NULL OR regexp_replace(phone,'[^0-9]','','g')<>normalized THEN RAISE EXCEPTION 'Veuillez vérifier ce numéro par SMS' USING ERRCODE='42501'; END IF;
+ IF phone IS NULL OR regexp_replace(phone,'[^0-9]','','g')<>normalized THEN RAISE EXCEPTION 'Veuillez vérifier votre numéro de téléphone' USING ERRCODE='42501'; END IF;
  PERFORM pg_advisory_xact_lock(hashtextextended(uid::text,0));
  IF EXISTS(SELECT 1 FROM public.orders WHERE customer_user_id=uid AND created_at>now()-interval '30 seconds') THEN RAISE EXCEPTION 'Veuillez patienter avant une autre commande'; END IF;
  SELECT * INTO tenant FROM public.restaurants WHERE id=(payload->>'restaurantId')::uuid AND is_active FOR SHARE;

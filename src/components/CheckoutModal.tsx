@@ -77,18 +77,19 @@ export const CheckoutModal: React.FC = () => {
   const handleSendOtp = async () => {
     setOtpBusy(true); setErrorMessage(null); setOtpError(null); setIsPhoneVerified(false);
     try {
-      const { error } = await supabase.auth.signInWithOtp({ phone: normalizePhone(phone) });
+      const { error } = await supabase.auth.signInWithOtp({ phone: normalizePhone(phone), options: { channel: 'whatsapp' } });
       if (error) throw error;
       setIsOtpSent(true);
-      setOtpToast(language === 'ar' ? 'تصيفط ليك الرمز فـ SMS.' : 'Code envoyé par SMS.');
+      setOtpToast(language === 'ar' ? 'تصيفط ليك الرمز فواتساب.' : 'Code envoyé par WhatsApp.');
     } catch {
       setIsOtpSent(false);
-      setErrorMessage(language === 'ar' ? 'ما قدرناش نصيفطو SMS. عاود المحاولة ولا تاصل بالمطعم.' : 'Envoi SMS indisponible. Réessayez ou contactez le restaurant.');
+      setErrorMessage(language === 'ar' ? 'ما قدرناش نصيفطو الرمز فواتساب. عاود المحاولة ولا تاصل بالمطعم.' : 'Envoi du code WhatsApp indisponible. Réessayez ou contactez le restaurant.');
     } finally { setOtpBusy(false); }
   };
   const handleVerifyOtp = async () => {
     setOtpBusy(true); setOtpError(null);
     try {
+      // Supabase's phone OTP verification type stays 'sms' for WhatsApp delivery.
       const { data, error } = await supabase.auth.verifyOtp({ phone: normalizePhone(phone), token: otpCode.trim(), type: 'sms' });
       if (error || !data.session) throw error;
       setIsPhoneVerified(true); setOtpToast(null); setOtpCode('');
@@ -130,7 +131,7 @@ export const CheckoutModal: React.FC = () => {
     let finalFullName = fullName.trim();
     let cleanedPhone: string;
     try { cleanedPhone = normalizePhone(phone); } catch { setErrorMessage('Numéro de téléphone invalide.'); return; }
-    if (!isPhoneVerified) { setErrorMessage(language === 'ar' ? 'أكد رقم الهاتف بالرمز اللي جاك فـ SMS.' : 'Validez le code SMS avant de confirmer.'); return; }
+    if (!isPhoneVerified) { setErrorMessage(language === 'ar' ? 'أكد رقم الهاتف بالرمز اللي جاك فواتساب.' : 'Validez le code WhatsApp avant de confirmer.'); return; }
 
     if (isDineIn) {
       // Le prénom reste facultatif à table ; le téléphone doit être vérifié.
@@ -163,8 +164,8 @@ export const CheckoutModal: React.FC = () => {
       if (requirePhoneVerification && !isPhoneVerified) {
         setErrorMessage(
           language === 'ar'
-            ? 'يرجى تأكيد رقم الهاتف عبر رمز التحقق SMS أولاً.'
-            : 'Veuillez valider le code SMS reçu sur votre numéro avant de confirmer la commande.'
+            ? 'يرجى تأكيد رقم الهاتف بالرمز اللي جاك فواتساب.'
+            : 'Veuillez valider le code WhatsApp reçu sur votre numéro avant de confirmer la commande.'
         );
         return;
       }
@@ -357,8 +358,8 @@ export const CheckoutModal: React.FC = () => {
                       </p>
                       <p className="text-[11px] text-emerald-700 mt-0.5">
                         {language === 'ar'
-                          ? 'أنت جالس بالفعل على الطاولة! الاسم اختياري. أكد رقم الهاتف بالـ SMS باش تصيفط الطلب للمطبخ.'
-                          : 'Vous êtes déjà installé à table. Le prénom est facultatif. Vérifiez votre téléphone par SMS pour confirmer votre commande.'}
+                          ? 'أنت جالس بالفعل على الطاولة! الاسم اختياري. أكد رقم الهاتف بالرمز اللي جاك فواتساب باش تصيفط الطلب للمطبخ.'
+                          : 'Vous êtes déjà installé à table. Le prénom est facultatif. Vérifiez votre téléphone par WhatsApp pour confirmer votre commande.'}
                       </p>
                     </div>
                   </div>
@@ -521,12 +522,12 @@ export const CheckoutModal: React.FC = () => {
                             disabled={otpBusy} onClick={handleSendOtp}
                             className="px-3 py-1.5 bg-orange-100 hover:bg-orange-200 text-primary-700 rounded-xl text-xs font-bold whitespace-nowrap transition-colors"
                           >
-                            {isOtpSent ? 'Renvoyer code' : 'Code SMS'}
+                            {language === 'ar' ? (isOtpSent ? 'عاود صيفط الرمز' : 'رمز واتساب') : (isOtpSent ? 'Renvoyer le code' : 'Code WhatsApp')}
                           </button>
                         )}
                       </div>
 
-                      {/* SMS delivery confirmation, never the secret code */}
+                      {/* WhatsApp delivery confirmation, never the secret code */}
                       {otpToast && (
                         <div className="bg-emerald-950 text-emerald-200 border border-emerald-800 p-2.5 rounded-xl text-xs flex items-center gap-2 animate-fadeIn shadow-md">
                           <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
@@ -538,11 +539,13 @@ export const CheckoutModal: React.FC = () => {
                       {isOtpSent && !isPhoneVerified && (
                         <div className="bg-orange-50 p-3 rounded-xl border border-orange-200 space-y-2 mt-1 animate-fade-in">
                           <span className="text-[11px] font-semibold text-orange-950 block">
-                            {language === 'ar' ? 'أدخل رمز التحقق :' : 'Saisissez le code SMS reçu :'}
+                            {language === 'ar' ? 'دخل الرمز اللي جاك فواتساب :' : 'Saisissez le code reçu sur WhatsApp :'}
                           </span>
                           <div className="flex gap-2">
                             <input
                               type="text"
+                              inputMode="numeric"
+                              autoComplete="one-time-code"
                               maxLength={10}
                               value={otpCode}
                               onChange={(e) => setOtpCode(e.target.value)}

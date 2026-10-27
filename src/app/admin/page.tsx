@@ -1066,7 +1066,7 @@ function AdminPage() {
                 </p>
               </div>
 
-              <p className="text-xs">La vérification SMS est obligatoire et contrôlée en base. Le plafond espèces est fixé à 500 DH en base.</p>
+              <p className="text-xs">La vérification du numéro par code WhatsApp est obligatoire et contrôlée en base. Le plafond espèces est fixé à 500 DH en base.</p>
             </div>
 
             {/* Blacklist Management */}
