@@ -25,107 +25,7 @@ import {
 import { Order, OrderStatus } from '@/types';
 import { RESTAURANT_INFO } from '@/data/mockData';
 import { supabase } from '@/lib/supabase';
-
-// Mock initial live orders for demo
-const INITIAL_ORDERS: Order[] = [
-  {
-    id: 'ord_1',
-    orderNumber: 'CMD-1042',
-    createdAt: '13:12',
-    status: 'new',
-    mode: 'delivery',
-    items: [
-      {
-        cartItemId: '1',
-        product: {
-          id: 'b1',
-          categoryId: 'burgers',
-          name: { fr: 'Le Truffe & Bacon Burger', ar: 'برجر الكمأة' },
-          description: { fr: '', ar: '' },
-          price: 68,
-          image: '',
-          allergens: [],
-          isAvailable: true,
-        },
-        selectedOptions: [
-          { groupId: '1', groupName: { fr: 'Cuisson', ar: '' }, optionId: '1', optionName: { fr: 'À point', ar: '' }, price: 0 },
-          { groupId: '2', groupName: { fr: 'Supplément', ar: '' }, optionId: '2', optionName: { fr: 'Double Cheddar', ar: '' }, price: 8 },
-        ],
-        quantity: 2,
-        unitPrice: 76,
-        totalPrice: 152,
-        specialInstructions: 'Sans sauce pimentée SVP',
-      },
-      {
-        cartItemId: '2',
-        product: {
-          id: 'd1',
-          categoryId: 'drinks',
-          name: { fr: 'Limonade Maison Menthe & Citron', ar: '' },
-          description: { fr: '', ar: '' },
-          price: 22,
-          image: '',
-          allergens: [],
-          isAvailable: true,
-        },
-        selectedOptions: [],
-        quantity: 2,
-        unitPrice: 22,
-        totalPrice: 44,
-      }
-    ],
-    subtotal: 196,
-    deliveryFee: 15,
-    total: 211,
-    customer: {
-      fullName: 'Karim Bennani',
-      phone: '06 61 23 45 67',
-      address: '24 Rue Ibn Sina, Résidence Les Fleurs, 4ème étage',
-      landmark: 'Près de la Banque Populaire',
-      specialInstructions: 'Sonnette en panne, merci d\'appeler à l\'arrivée',
-      paymentMethod: 'cash',
-      cashChangeAmount: 'Billet de 200 DH + appoint',
-    }
-  },
-  {
-    id: 'ord_2',
-    orderNumber: 'CMD-1041',
-    createdAt: '12:58',
-    status: 'preparing',
-    mode: 'takeaway',
-    items: [
-      {
-        cartItemId: '3',
-        product: {
-          id: 'p1',
-          categoryId: 'pizzas',
-          name: { fr: 'Pizza Burrata & Pesto', ar: '' },
-          description: { fr: '', ar: '' },
-          price: 75,
-          image: '',
-          allergens: [],
-          isAvailable: true,
-        },
-        selectedOptions: [
-          { groupId: '1', groupName: { fr: 'Pâte', ar: '' }, optionId: '1', optionName: { fr: 'Croûte au fromage', ar: '' }, price: 15 },
-        ],
-        quantity: 1,
-        unitPrice: 90,
-        totalPrice: 90,
-      }
-    ],
-    subtotal: 90,
-    deliveryFee: 0,
-    total: 90,
-    customer: {
-      fullName: 'Sarah Alami',
-      phone: '06 72 88 99 00',
-      address: RESTAURANT_INFO.address,
-      deliveryTimeSlot: '13:30 - 13:45',
-      paymentMethod: 'tpe',
-    }
-  }
-];
+import { StaffAuthGate } from '@/components/StaffAuthGate';
 
 export default function KdsPage() {
   const [orders, setOrders] = useState<Order[]>([]);
@@ -401,7 +301,8 @@ export default function KdsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-900 text-white p-4 sm:p-6 flex flex-col font-sans">
+    <StaffAuthGate role="kds" title="Cuisine & KDS" subtitle="Saisissez le code PIN cuisine pour accéder au flux de production">
+      <div className="min-h-screen bg-slate-900 text-white p-4 sm:p-6 flex flex-col font-sans">
       {/* KDS Top Header */}
       <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-slate-800">
         <div className="flex items-center gap-3">
@@ -924,5 +825,6 @@ export default function KdsPage() {
         </div>
       )}
     </div>
+    </StaffAuthGate>
   );
 }

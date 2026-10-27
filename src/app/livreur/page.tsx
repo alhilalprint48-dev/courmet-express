@@ -18,106 +18,7 @@ import {
 } from 'lucide-react';
 import { Order } from '@/types';
 import { supabase } from '@/lib/supabase';
-
-// Mock active deliveries for the courier
-const INITIAL_DELIVERIES: Order[] = [
-  {
-    id: 'ord_1',
-    orderNumber: 'CMD-1042',
-    createdAt: '13:12',
-    status: 'delivering',
-    mode: 'delivery',
-    items: [
-      {
-        cartItemId: '1',
-        product: {
-          id: 'b1',
-          categoryId: 'burgers',
-          name: { fr: '2x Le Truffe & Bacon Burger', ar: '' },
-          description: { fr: '', ar: '' },
-          price: 68,
-          image: '',
-          allergens: [],
-          isAvailable: true,
-        },
-        selectedOptions: [],
-        quantity: 2,
-        unitPrice: 76,
-        totalPrice: 152,
-      },
-      {
-        cartItemId: '2',
-        product: {
-          id: 'd1',
-          categoryId: 'drinks',
-          name: { fr: '2x Limonade Maison', ar: '' },
-          description: { fr: '', ar: '' },
-          price: 22,
-          image: '',
-          allergens: [],
-          isAvailable: true,
-        },
-        selectedOptions: [],
-        quantity: 2,
-        unitPrice: 22,
-        totalPrice: 44,
-      }
-    ],
-    subtotal: 196,
-    deliveryFee: 15,
-    total: 211,
-    customer: {
-      fullName: 'Karim Bennani',
-      phone: '0661234567',
-      address: '24 Rue Ibn Sina, Résidence Les Fleurs, Imm B, 4ème étage, Appt 12',
-      landmark: 'En face de la Banque Populaire',
-      specialInstructions: 'Sonnette en panne, merci d\'appeler dès votre arrivée',
-      paymentMethod: 'cash',
-      cashChangeAmount: 'Billet de 200 DH (prévoir 39 DH de monnaie)',
-      gpsCoords: {
-        lat: 33.589886,
-        lng: -7.603869,
-      }
-    }
-  },
-  {
-    id: 'ord_3',
-    orderNumber: 'CMD-1045',
-    createdAt: '13:25',
-    status: 'ready',
-    mode: 'delivery',
-    items: [
-      {
-        cartItemId: '3',
-        product: {
-          id: 'p1',
-          categoryId: 'pizzas',
-          name: { fr: '1x Pizza Burrata & Pesto', ar: '' },
-          description: { fr: '', ar: '' },
-          price: 75,
-          image: '',
-          allergens: [],
-          isAvailable: true,
-        },
-        selectedOptions: [],
-        quantity: 1,
-        unitPrice: 75,
-        totalPrice: 75,
-      }
-    ],
-    subtotal: 75,
-    deliveryFee: 15,
-    total: 90,
-    customer: {
-      fullName: 'Mehdi Tazi',
-      phone: '0655443322',
-      address: '15 Boulevard Zerktouni, 2ème étage',
-      landmark: 'Au-dessus du café Costa',
-      paymentMethod: 'tpe',
-      cashChangeAmount: undefined,
-    }
-  }
-];
+import { StaffAuthGate } from '@/components/StaffAuthGate';
 
 export default function DeliveryPage() {
   const [deliveries, setDeliveries] = useState<Order[]>([]);
@@ -271,7 +172,8 @@ export default function DeliveryPage() {
   const finishedDeliveries = deliveries.filter((d) => d.status === 'delivered');
 
   return (
-    <div className="min-h-screen bg-slate-900 text-slate-100 flex flex-col font-sans max-w-lg mx-auto">
+    <StaffAuthGate role="livreur" title="Espace Coursier & Livreur" subtitle="Saisissez votre code PIN coursier pour accéder aux tournées de livraison">
+      <div className="min-h-screen bg-slate-900 text-slate-100 flex flex-col font-sans max-w-lg mx-auto">
       {/* Header Livreur */}
       <div className="bg-slate-800 border-b border-slate-700/80 p-4 sticky top-0 z-20">
         <div className="flex items-center justify-between">
@@ -470,5 +372,6 @@ export default function DeliveryPage() {
         )}
       </div>
     </div>
+    </StaffAuthGate>
   );
 }

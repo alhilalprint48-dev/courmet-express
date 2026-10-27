@@ -48,13 +48,24 @@ import {
 } from 'lucide-react';
 import QRCode from 'qrcode';
 import { useApp } from '@/context/AppContext';
-import { PRODUCTS as DEFAULT_PRODUCTS, RESTAURANT_INFO, CATEGORIES } from '@/data/mockData';
+import { RESTAURANT_INFO, CATEGORIES } from '@/data/mockData';
 import { Product } from '@/types';
+import { StaffAuthGate } from '@/components/StaffAuthGate';
 
 export default function AdminPage() {
-  const { categories, addCategory, deleteCategory } = useApp();
+  const { 
+    categories, 
+    addCategory, 
+    deleteCategory, 
+    products, 
+    toggleProductAvailability, 
+    addProduct, 
+    deleteProduct,
+    blacklist,
+    addToBlacklist,
+    removeFromBlacklist
+  } = useApp();
   const [activeTab, setActiveTab] = useState<'catalog' | 'settings' | 'antifraud' | 'qrcodes' | 'analytics'>('catalog');
-  const [products, setProducts] = useState<Product[]>(DEFAULT_PRODUCTS);
   const [search, setSearch] = useState('');
 
   // Category Creation State
@@ -151,10 +162,6 @@ export default function AdminPage() {
   // Anti-fraud State
   const [maxCodLimit, setMaxCodLimit] = useState(500); // 500 DH max COD
   const [requirePhoneVerification, setRequirePhoneVerification] = useState(true);
-  const [blacklist, setBlacklist] = useState<string[]>([
-    '0612000000',
-    '0699112233',
-  ]);
   const [newBlacklistPhone, setNewBlacklistPhone] = useState('');
 
   // Add Product Form State
@@ -186,29 +193,24 @@ export default function AdminPage() {
     }
   };
 
-  // Toggle Stock Availability in 1 click
-  const handleToggleStock = (productId: string) => {
-    setProducts((prev) =>
-      prev.map((p) =>
-        p.id === productId ? { ...p, isAvailable: !p.isAvailable } : p
-      )
-    );
+  // Toggle Stock Availability in 1 click (Persisted to Supabase)
+  const handleToggleStock = async (productId: string) => {
+    await toggleProductAvailability(productId);
   };
 
-  // Delete a product from catalog
-  const handleDeleteProduct = (productId: string) => {
-    if (window.confirm("Voulez-vous vraiment supprimer ce produit du catalogue ?")) {
-      setProducts((prev) => prev.filter((p) => p.id !== productId));
+  // Delete a product from catalog (Persisted to Supabase)
+  const handleDeleteProduct = async (productId: string) => {
+    if (window.confirm("Voulez-vous vraiment supprimer définitivement ce produit du catalogue ?")) {
+      await deleteProduct(productId);
     }
   };
 
-  // Add a new product
-  const handleCreateProduct = (e: React.FormEvent) => {
+  // Add a new product (Persisted to Supabase)
+  const handleCreateProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newNameFr || !newPrice) return;
 
-    const newProd: Product = {
-      id: 'p_' + Date.now(),
+    await addProduct({
       categoryId: newCategory,
       name: {
         fr: newNameFr,
@@ -224,9 +226,8 @@ export default function AdminPage() {
         'https://images.unsplash.com/photo-1546069901-ba9599a7e63c?auto=format&fit=crop&w=800&q=80',
       allergens: [],
       isAvailable: true,
-    };
+    });
 
-    setProducts([newProd, ...products]);
     setIsAddingProduct(false);
     setNewNameFr('');
     setNewNameAr('');
@@ -236,18 +237,15 @@ export default function AdminPage() {
     setPreviewImage(null);
   };
 
-  const handleAddBlacklist = (e: React.FormEvent) => {
+  const handleAddBlacklist = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newBlacklistPhone) return;
-    const clean = newBlacklistPhone.replace(/\s+/g, '');
-    if (!blacklist.includes(clean)) {
-      setBlacklist([...blacklist, clean]);
-    }
+    await addToBlacklist(newBlacklistPhone);
     setNewBlacklistPhone('');
   };
 
-  const handleRemoveBlacklist = (num: string) => {
-    setBlacklist(blacklist.filter((n) => n !== num));
+  const handleRemoveBlacklist = async (num: string) => {
+    await removeFromBlacklist(num);
   };
 
   const filteredProducts = products.filter(
@@ -257,6 +255,7 @@ export default function AdminPage() {
   );
 
   return (
+    <StaffAuthGate role="admin" title="Console Gérant & Admin" subtitle="Authentification requise pour gérer la carte, les stocks et les règles anti-fraude">
     <div className="min-h-screen bg-slate-50 text-slate-900 font-sans pb-16">
       {/* Admin Top Header */}
       <header className="bg-white border-b border-slate-200 sticky top-0 z-20 shadow-xs">
@@ -1255,5 +1254,6 @@ export default function AdminPage() {
         )}
       </main>
     </div>
+    </StaffAuthGate>
   );
 }

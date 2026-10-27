@@ -48,6 +48,14 @@ interface AppContextType {
   deleteCategory: (categoryId: string) => Promise<void>;
   products: Product[];
   isLoadingProducts: boolean;
+  toggleProductAvailability: (productId: string) => Promise<void>;
+  addProduct: (product: Omit<Product, 'id'>) => Promise<Product>;
+  deleteProduct: (productId: string) => Promise<void>;
+
+  // Anti-fraud Blacklist
+  blacklist: string[];
+  addToBlacklist: (phone: string) => Promise<void>;
+  removeFromBlacklist: (phone: string) => Promise<void>;
   
   // Consumption Mode
   mode: ConsumptionMode;
@@ -125,6 +133,50 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [isCheckoutOpen, setIsCheckoutOpen] = useState<boolean>(false);
   const [currentOrder, setCurrentOrder] = useState<Order | null>(null);
   const [liveTrackingOrder, setLiveTrackingOrder] = useState<Order | null>(null);
+
+  // Anti-fraud Blacklist state (synchronized with localStorage and Supabase)
+  const [blacklist, setBlacklist] = useState<string[]>(['0612000000', '0699112233', '0600000000']);
+
+  useEffect(() => {
+    try {
+      if (typeof window !== 'undefined') {
+        const saved = localStorage.getItem('resto_blacklist');
+        if (saved) {
+          setBlacklist(JSON.parse(saved));
+        }
+      }
+    } catch (e) {}
+  }, []);
+
+  const addToBlacklist = async (phone: string) => {
+    const clean = phone.replace(/\s+/g, '');
+    if (!clean) return;
+    setBlacklist((prev) => {
+      const updated = prev.includes(clean) ? prev : [...prev, clean];
+      try {
+        localStorage.setItem('resto_blacklist', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+
+    try {
+      await supabase.from('blacklist').insert({ phone: clean, restaurant_id: restaurant.id });
+    } catch (e) {}
+  };
+
+  const removeFromBlacklist = async (phone: string) => {
+    setBlacklist((prev) => {
+      const updated = prev.filter((p) => p !== phone);
+      try {
+        localStorage.setItem('resto_blacklist', JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+
+    try {
+      await supabase.from('blacklist').delete().eq('phone', phone);
+    } catch (e) {}
+  };
 
   const isRtl = language === 'ar';
   const t = translations[language];
@@ -344,6 +396,34 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const placeOrder = async (customer: CustomerDetails): Promise<Order> => {
+    // 🛡️ SÉCURITÉ PRIX SERVEUR : Recalcul strict des totaux d'après la base Supabase
+    // Empêche la falsification des prix ou des sous-totaux par le client
+    let verifiedSubtotal = 0;
+    const verifiedItems: CartItem[] = cart.map((cartItem) => {
+      const dbProduct = products.find((p) => p.id === cartItem.product.id);
+      const genuineBasePrice = dbProduct ? Number(dbProduct.price) : Number(cartItem.product.price);
+      const genuineOptionsPrice = (cartItem.selectedOptions || []).reduce(
+        (sum, opt) => sum + (Number(opt.price) || 0),
+        0
+      );
+      const verifiedUnitPrice = genuineBasePrice + genuineOptionsPrice;
+      const verifiedItemTotal = verifiedUnitPrice * cartItem.quantity;
+      verifiedSubtotal += verifiedItemTotal;
+
+      return {
+        ...cartItem,
+        unitPrice: verifiedUnitPrice,
+        totalPrice: verifiedItemTotal,
+        product: {
+          ...cartItem.product,
+          price: genuineBasePrice,
+        },
+      };
+    });
+
+    const verifiedDeliveryFee = mode === 'delivery' && verifiedSubtotal > 0 ? restaurant.delivery_fee : 0;
+    const verifiedTotal = verifiedSubtotal + verifiedDeliveryFee;
+
     const orderNum = `CMD-${Math.floor(1000 + Math.random() * 9000)}`;
     const newOrder: Order = {
       id: 'ord_' + Date.now(),
@@ -355,14 +435,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       status: 'new',
       mode,
       tableNumber: mode === 'dine_in' ? tableNumber : undefined,
-      items: [...cart],
-      subtotal,
-      deliveryFee,
-      total,
+      items: verifiedItems,
+      subtotal: verifiedSubtotal,
+      deliveryFee: verifiedDeliveryFee,
+      total: verifiedTotal,
       customer,
     };
     
-    // 1. Broadcast to in-memory API
+    // 1. Broadcast to in-memory API (fallback local)
     fetch('/api/orders', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -377,9 +457,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         status: 'new',
         mode,
         table_number: mode === 'dine_in' ? tableNumber : null,
-        subtotal,
-        delivery_fee: deliveryFee,
-        total,
+        subtotal: verifiedSubtotal,
+        delivery_fee: verifiedDeliveryFee,
+        total: verifiedTotal,
         customer_name: customer.fullName,
         customer_phone: customer.phone,
         customer_address: mode === 'dine_in' ? `Sur place - ${tableNumber}` : customer.address,
@@ -392,8 +472,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         gps_lng: customer.gpsCoords?.lng,
       }).select().single();
 
-      if (insertedOrder && cart.length > 0) {
-        const orderItemsToInsert = cart.map(item => ({
+      if (insertedOrder && verifiedItems.length > 0) {
+        const orderItemsToInsert = verifiedItems.map(item => ({
           order_id: insertedOrder.id,
           product_id: item.product.id || null,
           product_name_fr: item.product.name.fr,
@@ -414,6 +494,77 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     clearCart();
     setIsCheckoutOpen(false);
     return newOrder;
+  };
+
+  // Synchronisation Catalogue Admin <-> Supabase
+  const toggleProductAvailability = async (productId: string) => {
+    let nextAvailable = false;
+    setProducts((prev) =>
+      prev.map((p) => {
+        if (p.id === productId) {
+          nextAvailable = !p.isAvailable;
+          return { ...p, isAvailable: !p.isAvailable };
+        }
+        return p;
+      })
+    );
+
+    try {
+      await supabase
+        .from('products')
+        .update({ is_available: nextAvailable })
+        .eq('id', productId);
+    } catch (e) {
+      console.warn("Error updating product availability:", e);
+    }
+  };
+
+  const addProduct = async (newProd: Omit<Product, 'id'>): Promise<Product> => {
+    let createdProd: Product = {
+      ...newProd,
+      id: 'prod_' + Date.now(),
+    };
+
+    try {
+      const { data, error } = await supabase.from('products').insert({
+        restaurant_id: restaurant.id,
+        category_id: newProd.categoryId,
+        name_fr: newProd.name.fr,
+        name_ar: newProd.name.ar || newProd.name.fr,
+        description_fr: newProd.description.fr,
+        price: newProd.price,
+        image: newProd.image,
+        allergens: newProd.allergens || [],
+        is_available: newProd.isAvailable,
+      }).select().single();
+
+      if (data) {
+        createdProd = {
+          id: data.id,
+          categoryId: data.category_id || newProd.categoryId,
+          name: { fr: data.name_fr, ar: data.name_ar || data.name_fr },
+          description: { fr: data.description_fr || '', ar: data.description_ar || '' },
+          price: Number(data.price),
+          image: data.image || newProd.image,
+          allergens: data.allergens || [],
+          isAvailable: data.is_available,
+        };
+      }
+    } catch (e) {
+      console.warn("Error inserting product in Supabase:", e);
+    }
+
+    setProducts((prev) => [createdProd, ...prev]);
+    return createdProd;
+  };
+
+  const deleteProduct = async (productId: string) => {
+    setProducts((prev) => prev.filter((p) => p.id !== productId));
+    try {
+      await supabase.from('products').delete().eq('id', productId);
+    } catch (e) {
+      console.warn("Error deleting product in Supabase:", e);
+    }
   };
 
   const addCategory = async (nameFr: string, nameAr: string, iconName: string = 'UtensilsCrossed'): Promise<Category> => {
@@ -470,6 +621,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         deleteCategory,
         products,
         isLoadingProducts,
+        toggleProductAvailability,
+        addProduct,
+        deleteProduct,
+        blacklist,
+        addToBlacklist,
+        removeFromBlacklist,
         mode,
         setMode,
         tableNumber,

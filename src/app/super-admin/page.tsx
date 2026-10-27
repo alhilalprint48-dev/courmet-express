@@ -22,6 +22,7 @@ import {
   RefreshCw
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import { StaffAuthGate } from '@/components/StaffAuthGate';
 
 interface RestaurantTenant {
   id: string;
@@ -155,7 +156,8 @@ export default function SuperAdminPage() {
   );
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans pb-16">
+    <StaffAuthGate role="superadmin" title="Console SaaS Super-Admin" subtitle="Authentification requise pour administrer les restaurants partenaires">
+      <div className="min-h-screen bg-slate-950 text-slate-100 font-sans pb-16">
       {/* Top Header */}
       <header className="border-b border-slate-800 bg-slate-900/90 backdrop-blur-md sticky top-0 z-20">
         <div className="max-w-6xl mx-auto px-4 py-3.5 flex items-center justify-between">
@@ -443,5 +445,6 @@ export default function SuperAdminPage() {
         </div>
       )}
     </div>
+    </StaffAuthGate>
   );
 }

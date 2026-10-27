@@ -18,7 +18,8 @@ import {
   Navigation, 
   ShieldCheck,
   AlertCircle,
-  UtensilsCrossed
+  UtensilsCrossed,
+  CheckCircle2
 } from 'lucide-react';
 import { PaymentMethod } from '@/types';
 import { RESTAURANT_INFO } from '@/data/mockData';
@@ -43,7 +44,8 @@ export const CheckoutModal: React.FC = () => {
     setGpsCoords, 
     placeOrder, 
     language, 
-    t 
+    t,
+    blacklist
   } = useApp();
 
   const [fullName, setFullName] = useState('');
@@ -60,11 +62,12 @@ export const CheckoutModal: React.FC = () => {
   // Anti-fraud & OTP Verification State
   const [isOtpSent, setIsOtpSent] = useState(false);
   const [otpCode, setOtpCode] = useState('');
+  const [generatedOtp, setGeneratedOtp] = useState<string | null>(null);
+  const [otpAttempts, setOtpAttempts] = useState(0);
+  const [otpToast, setOtpToast] = useState<string | null>(null);
   const [isPhoneVerified, setIsPhoneVerified] = useState(false);
   const [otpError, setOtpError] = useState<string | null>(null);
 
-  // Blacklist numbers (synchronisé avec l'admin)
-  const BLACKLISTED_PHONES = ['0612000000', '0699112233', '0600000000'];
   const MAX_COD_LIMIT = 500; // 500 DH max COD sans acompte
 
   if (!isCheckoutOpen) return null;
@@ -80,8 +83,8 @@ export const CheckoutModal: React.FC = () => {
       return;
     }
 
-    // Check blacklist
-    if (BLACKLISTED_PHONES.includes(cleaned)) {
+    // Check blacklist from database/admin
+    if (blacklist.includes(cleaned)) {
       setErrorMessage(
         language === 'ar'
           ? 'عذراً، هذا الرقم محظور بسبب سوابق عدم استلام الطلبات. يرجى الاتصال بالمطعم مباشرة.'
@@ -90,17 +93,41 @@ export const CheckoutModal: React.FC = () => {
       return;
     }
 
-    setErrorMessage(null);
+    const randomOtp = Math.floor(1000 + Math.random() * 9000).toString();
+    setGeneratedOtp(randomOtp);
+    setOtpAttempts(0);
     setIsOtpSent(true);
     setOtpError(null);
+    setErrorMessage(null);
+    setOtpToast(`📱 SMS Resto Express pour ${cleaned} : Votre code de validation est [ ${randomOtp} ]`);
   };
 
   const handleVerifyOtp = () => {
-    if (otpCode.trim() === '1234' || otpCode.trim().length === 4) {
+    if (!generatedOtp) {
+      setOtpError("Veuillez demander l'envoi d'un nouveau code.");
+      return;
+    }
+
+    if (otpAttempts >= 2 && otpCode.trim() !== generatedOtp) {
+      setOtpError("Nombre maximal de tentatives dépassé. Veuillez redemander un code SMS.");
+      setIsOtpSent(false);
+      setGeneratedOtp(null);
+      setOtpToast(null);
+      return;
+    }
+
+    if (otpCode.trim() === generatedOtp) {
       setIsPhoneVerified(true);
       setOtpError(null);
+      setOtpToast(null);
     } else {
-      setOtpError(language === 'ar' ? 'رمز التحقق غير صحيح (جرب 1234)' : 'Code OTP incorrect (essayez 1234).');
+      const nextAttempts = otpAttempts + 1;
+      setOtpAttempts(nextAttempts);
+      setOtpError(
+        language === 'ar'
+          ? `رمز التحقق غير صحيح. تبقى لك ${3 - nextAttempts} محاولة.`
+          : `Code OTP incorrect. Il vous reste ${3 - nextAttempts} tentative(s).`
+      );
     }
   };
 
@@ -166,7 +193,7 @@ export const CheckoutModal: React.FC = () => {
       }
 
       // Anti-fraud Blacklist check
-      if (BLACKLISTED_PHONES.includes(cleanedPhone)) {
+      if (blacklist.includes(cleanedPhone)) {
         setErrorMessage(
           language === 'ar'
             ? 'عذراً، هذا الرقم مسجل في القائمة السوداء للمطعم. يرجى التواصل هاتفياً.'
@@ -469,11 +496,19 @@ export const CheckoutModal: React.FC = () => {
                         )}
                       </div>
 
+                      {/* Live SMS Toast Simulation */}
+                      {otpToast && (
+                        <div className="bg-emerald-950 text-emerald-200 border border-emerald-800 p-2.5 rounded-xl text-xs flex items-center gap-2 animate-fadeIn shadow-md">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                          <span className="font-mono text-[11px]">{otpToast}</span>
+                        </div>
+                      )}
+
                       {/* OTP Code Input Box */}
                       {isOtpSent && !isPhoneVerified && (
-                        <div className="bg-orange-50 p-2.5 rounded-xl border border-orange-200 space-y-2 mt-1 animate-fade-in">
+                        <div className="bg-orange-50 p-3 rounded-xl border border-orange-200 space-y-2 mt-1 animate-fade-in">
                           <span className="text-[11px] font-semibold text-orange-950 block">
-                            Code à 4 chiffres envoyé par SMS (Tapez <strong>1234</strong> pour tester) :
+                            {language === 'ar' ? 'أدخل رمز التحقق المكون من 4 أرقام :' : 'Saisissez le code SMS reçu à 4 chiffres :'}
                           </span>
                           <div className="flex gap-2">
                             <input
@@ -481,19 +516,19 @@ export const CheckoutModal: React.FC = () => {
                               maxLength={4}
                               value={otpCode}
                               onChange={(e) => setOtpCode(e.target.value)}
-                              placeholder="1234"
-                              className="w-24 text-center font-mono font-black text-sm p-1.5 border rounded-lg bg-white"
+                              placeholder="••••"
+                              className="w-24 text-center font-mono font-black text-sm p-2 border rounded-lg bg-white tracking-widest"
                             />
                             <button
                               type="button"
                               onClick={handleVerifyOtp}
-                              className="px-3 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700"
+                              className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700 transition-colors shadow-sm"
                             >
                               Valider
                             </button>
                           </div>
                           {otpError && (
-                            <p className="text-[10px] font-bold text-red-600">{otpError}</p>
+                            <p className="text-[11px] font-bold text-red-600">{otpError}</p>
                           )}
                         </div>
                       )}
