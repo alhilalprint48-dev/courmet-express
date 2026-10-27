@@ -103,6 +103,7 @@ export type OrderStatus =
   | 'cancelled';
 
 export interface Order {
+  trackingToken?: string;
   id: string;
   orderNumber: string;
   createdAt: string;

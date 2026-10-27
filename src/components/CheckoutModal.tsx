@@ -23,7 +23,6 @@ import {
 } from 'lucide-react';
 import { PaymentMethod } from '@/types';
 import { RESTAURANT_INFO } from '@/data/mockData';
-import { supabase } from '@/lib/supabase';
 import { normalizePhone } from '@/lib/phone';
 
 export const CheckoutModal: React.FC = () => {
@@ -60,43 +59,10 @@ export const CheckoutModal: React.FC = () => {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [isLocating, setIsLocating] = useState(false);
 
-  // Anti-fraud & OTP Verification State
-  const [isOtpSent, setIsOtpSent] = useState(false);
-  const [otpCode, setOtpCode] = useState('');
-  const [otpToast, setOtpToast] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [otpBusy, setOtpBusy] = useState(false);
-  const requirePhoneVerification = true;
-  const [isPhoneVerified, setIsPhoneVerified] = useState(false);
-  const [otpError, setOtpError] = useState<string | null>(null);
-
-  const MAX_COD_LIMIT = 500; // 500 DH max COD sans acompte
+  const MAX_COD_LIMIT = 500;
 
   if (!isCheckoutOpen) return null;
-
-  const handleSendOtp = async () => {
-    setOtpBusy(true); setErrorMessage(null); setOtpError(null); setIsPhoneVerified(false);
-    try {
-      const { error } = await supabase.auth.signInWithOtp({ phone: normalizePhone(phone) });
-      if (error) throw error;
-      setIsOtpSent(true);
-      setOtpToast(language === 'ar' ? 'تصيفط ليك الرمز فـ SMS.' : 'Code envoyé par SMS.');
-    } catch {
-      setIsOtpSent(false);
-      setErrorMessage(language === 'ar' ? 'ما قدرناش نصيفطو SMS. عاود المحاولة ولا تاصل بالمطعم.' : 'Envoi SMS indisponible. Réessayez ou contactez le restaurant.');
-    } finally { setOtpBusy(false); }
-  };
-  const handleVerifyOtp = async () => {
-    setOtpBusy(true); setOtpError(null);
-    try {
-      const { data, error } = await supabase.auth.verifyOtp({ phone: normalizePhone(phone), token: otpCode.trim(), type: 'sms' });
-      if (error || !data.session) throw error;
-      setIsPhoneVerified(true); setOtpToast(null); setOtpCode('');
-    } catch {
-      setIsPhoneVerified(false);
-      setOtpError(language === 'ar' ? 'الرمز غلط ولا سالات الصلاحية ديالو.' : 'Code incorrect ou expiré.');
-    } finally { setOtpBusy(false); }
-  };
 
   const handleLocateMe = () => {
     if (!navigator.geolocation) {
@@ -128,12 +94,14 @@ export const CheckoutModal: React.FC = () => {
 
     const isDineIn = mode === 'dine_in';
     let finalFullName = fullName.trim();
-    let cleanedPhone: string;
-    try { cleanedPhone = normalizePhone(phone); } catch { setErrorMessage('Numéro de téléphone invalide.'); return; }
-    if (!isPhoneVerified) { setErrorMessage(language === 'ar' ? 'أكد رقم الهاتف بالرمز اللي جاك فـ SMS.' : 'Validez le code SMS avant de confirmer.'); return; }
+    let cleanedPhone = '';
+    if (!isDineIn) {
+      try { cleanedPhone = normalizePhone(phone); }
+      catch { setErrorMessage(language === 'ar' ? 'دخل رقم هاتف صحيح.' : 'Numéro de téléphone invalide.'); return; }
+    }
 
     if (isDineIn) {
-      // Le prénom reste facultatif à table ; le téléphone doit être vérifié.
+      // Aucun téléphone ni compte client requis à table.
       if (!finalFullName) {
         finalFullName = language === 'ar' ? `زبون ${tableNumber}` : `Client ${tableNumber}`;
       }
@@ -155,16 +123,6 @@ export const CheckoutModal: React.FC = () => {
           language === 'ar'
             ? 'يرجى إدخال رقم هاتف صحيح مكون من 8 أرقام على الأقل'
             : 'Veuillez saisir un numéro de téléphone valide.'
-        );
-        return;
-      }
-
-      // Phone verification check (si configuré actif dans l'Admin)
-      if (requirePhoneVerification && !isPhoneVerified) {
-        setErrorMessage(
-          language === 'ar'
-            ? 'يرجى تأكيد رقم الهاتف عبر رمز التحقق SMS أولاً.'
-            : 'Veuillez valider le code SMS reçu sur votre numéro avant de confirmer la commande.'
         );
         return;
       }
@@ -357,8 +315,8 @@ export const CheckoutModal: React.FC = () => {
                       </p>
                       <p className="text-[11px] text-emerald-700 mt-0.5">
                         {language === 'ar'
-                          ? 'أنت جالس بالفعل على الطاولة! الاسم اختياري. أكد رقم الهاتف بالـ SMS باش تصيفط الطلب للمطبخ.'
-                          : 'Vous êtes déjà installé à table. Le prénom est facultatif. Vérifiez votre téléphone par SMS pour confirmer votre commande.'}
+                          ? 'راك فالطاولة. الاسم اختياري وما محتاج لا هاتف لا رمز. العامل كيقبل الطلب قبل التحضير.'
+                          : 'Vous êtes déjà installé à table. Le prénom est facultatif. Aucun téléphone ni code nécessaire. Le personnel accepte votre commande avant préparation.'}
                       </p>
                     </div>
                   </div>
@@ -489,80 +447,19 @@ export const CheckoutModal: React.FC = () => {
                 </>
               )}
 
-                    {/* Phone */}
-                    <div className="space-y-1">
-                      <div className="flex items-center justify-between">
-                        <label className="text-xs font-bold text-gray-700 flex items-center gap-1">
-                          <Phone className="w-3.5 h-3.5 text-primary-600" />
-                          {t.checkout.phone} *
-                        </label>
-                        {requirePhoneVerification && isPhoneVerified && (
-                          <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                            ✓ Numéro Vérifié
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex gap-1.5">
-                        <input
-                          type="tel"
-                          required
-                          value={phone}
-                          onChange={(e) => {
-                            setPhone(e.target.value);
-                            setIsPhoneVerified(false);
-                            setIsOtpSent(false);
-                          }}
-                          placeholder={t.checkout.phonePlaceholder}
-                          className="flex-1 px-3 py-2 rounded-xl border border-gray-200 text-sm focus:ring-2 focus:ring-primary-500 outline-none"
-                        />
-                        {requirePhoneVerification && !isPhoneVerified && (
-                          <button
-                            type="button"
-                            disabled={otpBusy} onClick={handleSendOtp}
-                            className="px-3 py-1.5 bg-orange-100 hover:bg-orange-200 text-primary-700 rounded-xl text-xs font-bold whitespace-nowrap transition-colors"
-                          >
-                            {isOtpSent ? 'Renvoyer code' : 'Code SMS'}
-                          </button>
-                        )}
-                      </div>
-
-                      {/* SMS delivery confirmation, never the secret code */}
-                      {otpToast && (
-                        <div className="bg-emerald-950 text-emerald-200 border border-emerald-800 p-2.5 rounded-xl text-xs flex items-center gap-2 animate-fadeIn shadow-md">
-                          <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                          <span className="font-mono text-[11px]">{otpToast}</span>
-                        </div>
-                      )}
-
-                      {/* OTP Code Input Box */}
-                      {isOtpSent && !isPhoneVerified && (
-                        <div className="bg-orange-50 p-3 rounded-xl border border-orange-200 space-y-2 mt-1 animate-fade-in">
-                          <span className="text-[11px] font-semibold text-orange-950 block">
-                            {language === 'ar' ? 'أدخل رمز التحقق :' : 'Saisissez le code SMS reçu :'}
-                          </span>
-                          <div className="flex gap-2">
-                            <input
-                              type="text"
-                              maxLength={10}
-                              value={otpCode}
-                              onChange={(e) => setOtpCode(e.target.value)}
-                              placeholder="••••"
-                              className="w-24 text-center font-mono font-black text-sm p-2 border rounded-lg bg-white tracking-widest"
-                            />
-                            <button
-                              type="button"
-                              disabled={otpBusy} onClick={handleVerifyOtp}
-                              className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-xs font-bold hover:bg-emerald-700 transition-colors shadow-sm"
-                            >
-                              Valider
-                            </button>
-                          </div>
-                          {otpError && (
-                            <p className="text-[11px] font-bold text-red-600">{otpError}</p>
-                          )}
-                        </div>
-                      )}
-                    </div>
+              {mode !== 'dine_in' && (
+                <div className="space-y-2">
+                  <label className="text-xs font-bold text-gray-700 flex items-center gap-1">
+                    <Phone className="w-3.5 h-3.5 text-primary-600" />{t.checkout.phone} *
+                  </label>
+                  <input type="tel" required value={phone} onChange={e => setPhone(e.target.value)}
+                    placeholder={t.checkout.phonePlaceholder}
+                    className="w-full px-3 py-2 rounded-xl border border-gray-200 text-sm" />
+                  <p className="text-xs text-gray-600">
+                    {language === 'ar' ? 'من بعد تسجيل الطلب، صيفط رسالة واتساب للمطعم باش يأكدو ليك الطلب.' : 'Après enregistrement, envoyez le message WhatsApp au restaurant pour faire confirmer votre commande.'}
+                  </p>
+                </div>
+              )}
 
               {/* Payment Method Selector (Default: Pay on Delivery) */}
               <div className="space-y-2 pt-2">

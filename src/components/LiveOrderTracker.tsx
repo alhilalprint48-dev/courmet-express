@@ -38,11 +38,11 @@ export const LiveOrderTracker: React.FC = () => {
 
     const checkOrderStatus = async () => {
       try {
-        const { data, error } = await supabase
-          .from('orders')
-          .select('status')
-          .eq('id', liveTrackingOrder.id)
-          .maybeSingle();
+        if (!liveTrackingOrder.trackingToken) return;
+        const { data: state } = await supabase.rpc('guest_order_status', {
+          order_id: liveTrackingOrder.id, token: liveTrackingOrder.trackingToken,
+        });
+        const data = state ? { status: state } : null;
 
         if (data && data.status && data.status !== status) {
           const newStatus = data.status as OrderStatus;

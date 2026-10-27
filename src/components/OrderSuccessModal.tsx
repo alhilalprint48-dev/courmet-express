@@ -12,10 +12,9 @@ import {
   Phone,
   Banknote
 } from 'lucide-react';
-import { RESTAURANT_INFO } from '@/data/mockData';
 
 export const OrderSuccessModal: React.FC = () => {
-  const { currentOrder, setCurrentOrder, language, t } = useApp();
+  const { currentOrder, setCurrentOrder, language, t, restaurant } = useApp();
 
   if (!currentOrder) return null;
 
@@ -69,7 +68,7 @@ Merci de confirmer la prise en charge !`;
 
   const handleOpenWhatsApp = () => {
     const message = generateWhatsAppMessage();
-    const url = `https://wa.me/${RESTAURANT_INFO.whatsappNumber}?text=${message}`;
+    const url = `https://wa.me/${restaurant.whatsapp_number.replace(/[^0-9]/g, '')}?text=${message}`;
     window.open(url, '_blank');
   };
 
@@ -82,10 +81,10 @@ Merci de confirmer la prise en charge !`;
             <CheckCircle2 className="w-10 h-10 text-white" />
           </div>
           <h2 className="text-xl sm:text-2xl font-black tracking-tight">
-            {t.success.title}
+            {language === 'ar' ? 'تسجل الطلب ديالك' : 'Commande enregistrée'}
           </h2>
           <p className="text-emerald-100 text-xs mt-1">
-            {t.success.subtitle}
+            {language === 'ar' ? 'الطلب باقي كيتسنى تأكيد المطعم.' : 'En attente de validation par le restaurant.'}
           </p>
 
           <div className="mt-4 inline-flex items-center gap-2 bg-white/15 px-3 py-1.5 rounded-full text-xs font-mono font-bold tracking-wider">
@@ -97,18 +96,18 @@ Merci de confirmer la prise en charge !`;
         {/* Modal Body */}
         <div className="p-5 sm:p-6 overflow-y-auto space-y-5 flex-1 text-sm">
           {/* WhatsApp Direct Action Button */}
-          <div className="bg-emerald-50 border-2 border-emerald-500/40 p-4 rounded-2xl space-y-2.5 text-center">
+          {currentOrder.mode !== 'dine_in' && <div className="bg-emerald-50 border-2 border-emerald-500/40 p-4 rounded-2xl space-y-2.5 text-center">
             <button
               onClick={handleOpenWhatsApp}
               className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-black py-3.5 px-4 rounded-xl shadow-lg shadow-emerald-600/30 flex items-center justify-center gap-2.5 text-sm transition-all active:scale-[0.98]"
             >
               <MessageCircle className="w-5 h-5 fill-current" />
-              <span>{t.success.sendWhatsApp}</span>
+              <span>{language === 'ar' ? 'أكد الطلب فواتساب' : 'Confirmer sur WhatsApp'}</span>
             </button>
             <p className="text-[11px] text-emerald-800 font-medium">
-              {t.success.whatsappHint}
+              {language === 'ar' ? 'ضغط على إرسال فواتساب. المطعم كيأكد الطلب ملي كيتوصل بالرسالة.' : 'Appuyez sur Envoyer dans WhatsApp. Le restaurant valide après réception du message.'}
             </p>
-          </div>
+          </div>}
 
           {/* Amount to prepare */}
           <div className="bg-orange-50 border border-orange-200/80 rounded-2xl p-4 flex items-center justify-between">
@@ -188,10 +187,10 @@ Merci de confirmer la prise en charge !`;
               <MapPin className="w-4 h-4 text-primary-600 shrink-0" />
               <span className="truncate">{currentOrder.customer.address}</span>
             </div>
-            <div className="flex items-center gap-2">
+            {currentOrder.customer.phone && <div className="flex items-center gap-2">
               <Phone className="w-4 h-4 text-primary-600 shrink-0" />
               <span>{currentOrder.customer.phone} ({currentOrder.customer.fullName})</span>
-            </div>
+            </div>}
           </div>
         </div>
 
