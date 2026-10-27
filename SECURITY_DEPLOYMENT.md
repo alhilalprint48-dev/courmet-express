@@ -52,7 +52,7 @@ ON CONFLICT DO NOTHING;
 
 92 contrôles SQL passent. Les tests vérifient aussi la réservation initiale du propriétaire, le refus d’une adresse non confirmée, le refus d’un autre compte et la consommation unique de la réservation. Les tests couvrent la lecture anonyme, les écritures directes, la propriété des commandes, les rôles, les prix falsifiés, les options inconnues/dupliquées/obligatoires, les quantités, le plafond, les téléphones invalides, les commandes sans téléphone à table et le suivi par secret, le restaurant suspendu, les deux listes noires, le délai et le rollback intégral en cas d'échec d'une ligne.
 
-La compilation statique et TypeScript sont vérifiés localement avec une configuration Supabase factice. Le dépôt ne contient pas ESLint ; Next signale son absence pendant la compilation. Les tests ne prouvent pas l'état de la base distante, les réglages Auth/WhatsApp, les règles Storage, les anciennes API déployées ou les autres fonctions/vues absentes du dépôt. La validation de production reste à effectuer après installation. Aucun test d'envoi WhatsApp, de fournisseur de paiement, d'imprimante physique ou d'image Docker n'est revendiqué.
+La compilation statique et TypeScript sont vérifiés localement avec une configuration Supabase factice. ESLint et eslint-config-next sont installés avec versions fixes. Le contrôle npm run lint -- --max-warnings 0 est exécuté dans la CI. Les tests ne prouvent pas l'état de la base distante, les réglages Auth/WhatsApp, les règles Storage, les anciennes API déployées ou les autres fonctions/vues absentes du dépôt. La validation de production reste à effectuer après installation. Aucun test d'envoi WhatsApp, de fournisseur de paiement, d'imprimante physique ou d'image Docker n'est revendiqué.
 
 Le contrôle visuel automatisé n’a pas pu être exécuté : Chromium est absent et son téléchargement a échoué. Aucun test navigateur réussi n’est revendiqué.
 
@@ -73,3 +73,21 @@ Règle initiale : 1 point par tranche entière de 10 DH de produits, hors livrai
 Configurer Supabase Auth : Site URL = URL du site publié ; autoriser exactement l'URL `/compte` du site dans Redirect URLs. Le client fournit `emailRedirectTo` à l'inscription et au renvoi du lien. Configurer un SMTP permettant les inscriptions publiques : le service e-mail intégré Supabase peut limiter les destinataires aux membres de l'organisation. Ne pas désactiver la confirmation e-mail pour contourner un problème d'envoi. Les tests n'envoient aucun e-mail et ne créent aucun utilisateur réel.
 
 La vitrine `/saas` et ses liens sont retirés de l'export ; la gestion protégée des établissements reste disponible pour le responsable depuis Mon compte.
+
+## En-têtes et HTTPS
+
+`public/_headers` configure les réponses statiques Cloudflare Pages : anti-cadrage (X-Frame-Options DENY et CSP frame-ancestors none), nosniff, politique de référent, Permissions-Policy et HSTS. `nginx.conf` applique les mêmes en-têtes avec always, y compris pour les erreurs. La CSP autorise les scripts inline nécessaires à l'export Next.js ; elle ne constitue pas une protection XSS stricte.
+
+Le site Pages utilise le HTTPS de Cloudflare. Pour Docker, le port HTTP Nginx est publié uniquement sur 127.0.0.1. Pour un serveur public avec un domaine dont le DNS pointe vers le serveur : définir SITE_DOMAIN, puis lancer docker compose -f docker-compose.yml -f docker-compose.https.yml up -d --build. Caddy termine TLS, renouvelle les certificats et redirige HTTP vers HTTPS ; Nginx reste sur le réseau interne. Les ports 80/443 doivent être accessibles et les volumes Caddy conservés. Ce scénario TLS Docker n'a pas été exécuté dans cet environnement, où Docker est absent. La CI vérifie l'image Nginx et ses en-têtes.
+
+## Vérifications sur la base distante
+
+`tests/remote-isolation.sql` est un scénario transactionnel à exécuter comme propriétaire : identités et restaurants de test, commande, prix canonique, cycle de préparation, suivi, fidélité et isolation des données de A et B, puis ROLLBACK. Il n'installe aucun stub auth.uid. La validation cryptographique des JWT, la connexion navigateur et l'envoi e-mail restent hors de ce test SQL. Son exécution distante n'est pas revendiquée : le connecteur a échoué et une tentative a été interrompue. Ne pas confondre les 92 contrôles PGlite réussis avec ce test distant.
+
+## Éléments restant à finaliser
+
+L'historique examiné contient une ancienne clé publishable publique, pas de clé service_role, sb_secret ou JWT privilégié détecté. Une clé publishable et l'URL Supabase sont des informations publiques du client. Ne pas recréer un projet uniquement pour cette raison. Pour révoquer une ancienne clé publishable, créer une clé de remplacement dans Settings / API Keys, mettre à jour les variables de compilation de tous les clients, recompiler et vérifier avant de supprimer l'ancienne. Ne pas annoncer une révocation si elle n'a pas été effectuée.
+
+Le CAPTCHA commande doit être vérifié côté serveur avant l'appel de création. Le parcours actuel appelle directement une RPC publique et reste contournable par un robot. Ajouter seulement un widget client serait insuffisant. L'intégration à valider doit ajouter un point d'entrée serveur, valider success/action/hostname via Siteverify, puis retirer les droits de création directe anon/authenticated pour fermer le contournement. Aucun CAPTCHA de production n'est revendiqué dans ce correctif.
+
+Les réglages SMTP, Site URL et Redirect URLs demeurent à vérifier dans Supabase. Le connecteur disponible ne propose pas leur modification. Garder la confirmation e-mail activée. Aucun e-mail réel n'a été envoyé par ce correctif.

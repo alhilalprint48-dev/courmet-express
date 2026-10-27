@@ -1,0 +1,20 @@
+# Combine with docker-compose.yml for a public server with a configured domain.
+services:
+  proxy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      SITE_DOMAIN: ${SITE_DOMAIN:?Domaine public requis pour HTTPS}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - web
+volumes:
+  caddy_data:
+  caddy_config:

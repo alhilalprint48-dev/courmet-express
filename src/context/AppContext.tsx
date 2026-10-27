@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { 
   Language, 
   ConsumptionMode, 
@@ -138,10 +138,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [liveTrackingOrder, setLiveTrackingOrder] = useState<Order | null>(null);
 
   const [blacklist, setBlacklist] = useState<string[]>([]);
-  const refreshBlacklist = async () => {
+  const refreshBlacklist = useCallback(async () => {
     const { data, error } = await supabase.from('blacklist').select('phone').eq('restaurant_id', restaurant.id);
     setBlacklist(error ? [] : (data || []).map(row => row.phone));
-  };
+  }, [restaurant.id]);
   useEffect(() => {
     void refreshBlacklist();
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
@@ -153,7 +153,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setTimeout(() => { void refreshBlacklist(); }, 0);
     });
     return () => subscription.unsubscribe();
-  }, [restaurant.id]);
+  }, [refreshBlacklist]);
   const addToBlacklist = async (phone: string) => {
     const { error } = await supabase.from('blacklist').insert({ phone: normalizePhone(phone), restaurant_id: restaurant.id });
     if (error) throw new Error('Ajout refusé. Vérifiez vos droits.');
