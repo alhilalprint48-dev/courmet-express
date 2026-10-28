@@ -281,5 +281,62 @@ try {
   const boundary=(await serverCreate(cashOrder('Cash boundary'))).rows[0].result;
   eq('cash at exact limit accepted',Number(boundary.total),65);
   eq('cash order still awaits staff validation',boundary.status,'new');
+  await as('postgres');
+  const adminMigration=readFileSync(new URL('../supabase-admin-settings-analytics.sql',import.meta.url),'utf8');
+  await sql(adminMigration); await sql(adminMigration);
+  const c='20000000-0000-0000-0000-000000000003', d='20000000-0000-0000-0000-000000000004';
+  const pc='30000000-0000-0000-0000-000000000003';
+  await db.query("INSERT INTO public.restaurants(id,slug,name) VALUES($1,'analytics-c','C'),($2,'analytics-d','D')",[c,d]);
+  await db.query("INSERT INTO private.staff_members VALUES($1,$2,'admin')",[ids.manager,c]);
+  await db.query("INSERT INTO public.products(id,restaurant_id,name_fr,name_ar,price) VALUES($1,$2,'Best seller','Test',20)",[pc,c]);
+  const settings=(tenant,fee=0,minimum=0,whatsapp='212611223344')=>db.query('SELECT public.update_restaurant_settings($1,$2,$3,$4) AS result',[tenant,fee,minimum,whatsapp]);
+  const analytics=async tenant=>(await db.query('SELECT public.restaurant_analytics($1) AS result',[tenant])).rows[0].result;
+  await as('anon');
+  await reject('anonymous cannot save settings',()=>settings(c),/permission denied/);
+  await reject('anonymous cannot read revenue',()=>analytics(c),/permission denied/);
+  for (const user of [ids.customer,ids.kitchen,ids.driver]) {
+    await as('authenticated',user);
+    await reject('non-admin cannot save settings '+user,()=>settings(c),/refusée/);
+    await reject('non-admin cannot read analytics '+user,()=>analytics(c),/refusée/);
+  }
+  await as('authenticated',ids.manager);
+  await reject('admin cannot save foreign settings',()=>settings(d),/refusée/);
+  await reject('admin cannot read foreign analytics',()=>analytics(d),/refusée/);
+  for (const args of [[-1,0],[0,-1],[100001,0],[0,100001],[1.001,0],[0,1.001]]) await reject('invalid delivery settings '+args,()=>settings(c,...args),/invalides/);
+  await reject('invalid WhatsApp rejected',()=>settings(c,0,0,'bad'),/WhatsApp invalide/);
+  const saved=(await settings(c)).rows[0].result;
+  eq('saved zero fee persists',Number(saved.delivery_fee),0);
+  eq('saved zero minimum persists',Number(saved.min_delivery_amount),0);
+  eq('saved WhatsApp persists',saved.whatsapp_number,'212611223344');
+  const empty=await analytics(c);
+  eq('empty analytics returns zero',Number(empty.periods.month.revenue),0);
+  eq('empty analytics has no fake best sellers',empty.top_products,[]);
+  await as('service_role');
+  const settingsOrder=(await serverCreate(order({restaurantId:c,customer:{fullName:'Test',phone:'0677554433',address:'Test',paymentMethod:'cash'},items:[{productId:pc,quantity:1}]}))).rows[0].result;
+  eq('canonical checkout applies saved zero delivery fee',Number(settingsOrder.delivery_fee),0);
+  eq('canonical checkout applies saved minimum below old default',Number(settingsOrder.total),20);
+  await as('postgres');
+  await db.query("UPDATE public.orders SET created_at=(date_trunc('month',now() AT TIME ZONE 'Africa/Casablanca') AT TIME ZONE 'Africa/Casablanca')-interval '1 second',status='cancelled' WHERE id=$1",[settingsOrder.id]);
+  const rows=[];
+  for (const [tenant,status,total,age] of [[c,'delivered',100,'today'],[c,'delivered',50,'today'],[c,'cancelled',100,'today'],[c,'new',200,'today'],[c,'delivered',900,'old'],[d,'delivered',9999,'today']]) {
+    const created=age==='old' ? "(least(date_trunc('month',now() AT TIME ZONE 'Africa/Casablanca'),date_trunc('week',now() AT TIME ZONE 'Africa/Casablanca')) AT TIME ZONE 'Africa/Casablanca')-interval '1 second'" : "date_trunc('day',now() AT TIME ZONE 'Africa/Casablanca') AT TIME ZONE 'Africa/Casablanca'";
+    const row=(await db.query(`INSERT INTO public.orders(restaurant_id,order_number,status,mode,subtotal,total,customer_name,customer_phone,created_at) VALUES($1,'ANALYTICS-TEST',$2,'dine_in',$3,$3,'Test','',${created}) RETURNING id`,[tenant,status,total])).rows[0].id;
+    rows.push(row);
+  }
+  for (const [index,qty,price,name] of [[0,2,50,'Best seller'],[1,1,50,'Deleted product'],[4,99,1,'Old product'],[5,999,1,'Foreign product']]) {
+    await db.query('INSERT INTO public.order_items(order_id,product_id,product_name_fr,quantity,unit_price,total_price) VALUES($1,NULL,$2,$3,$4,$5)',[rows[index],name,qty,price,qty*price]);
+  }
+  await as('authenticated',ids.manager);
+  const stats=await analytics(c);
+  eq('analytics uses Moroccan calendar',stats.timezone,'Africa/Casablanca');
+  for (const key of ['day','week','month']) {
+    eq(key+' revenue excludes pending, cancelled, old and foreign orders',Number(stats.periods[key].revenue),150);
+    eq(key+' completed order count',Number(stats.periods[key].order_count),2);
+  }
+  eq('monthly cancellation count',Number(stats.periods.month.cancelled_count),1);
+  eq('monthly pending count',Number(stats.periods.month.pending_count),1);
+  eq('best sellers use quantities from completed monthly orders',stats.top_products.map(p=>[p.name,Number(p.quantity),Number(p.revenue)]),[['Best seller',2,100],['Deleted product',1,50]]);
+  await as('postgres');
+  eq('no public security definer in admin features',(await db.query("SELECT count(*)::int AS n FROM pg_proc p JOIN pg_namespace ns ON ns.oid=p.pronamespace WHERE ns.nspname='public' AND prosecdef")).rows[0].n,0);
   console.log(`\n${checks} security checks passed (isolated PostgreSQL; no production calls).`);
 } catch (error) { console.error(error.message, error.where || ''); process.exitCode = 1; } finally { await db.close(); }

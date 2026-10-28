@@ -123,6 +123,13 @@ export const CheckoutModal: React.FC = () => {
         return;
       }
 
+      if (mode === 'delivery' && subtotal < restaurant.min_delivery_amount) {
+        setErrorMessage(language === 'ar'
+          ? `الحد الأدنى للتوصيل هو ${restaurant.min_delivery_amount} درهم بلا مصاريف التوصيل.`
+          : `Le minimum de livraison est de ${restaurant.min_delivery_amount} DH hors frais de livraison.`);
+        return;
+      }
+
       // Phone simple sanity check (format marocain ou international)
       if (cleanedPhone.length < 8) {
         setErrorMessage(
