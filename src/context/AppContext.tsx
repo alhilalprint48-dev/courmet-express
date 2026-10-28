@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { 
   Language, 
   ConsumptionMode, 
@@ -30,6 +30,9 @@ export interface RestaurantData {
   min_delivery_amount: number;
   max_cash_amount: number;
   is_active: boolean;
+  is_open: boolean;
+  open_hours: string;
+  closed_message: string;
 }
 
 interface AppContextType {
@@ -45,6 +48,8 @@ interface AppContextType {
   updateCashLimit: (amount: number) => Promise<void>;
   updateRestaurantSettings: (fee: number, minimum: number, whatsapp: string) => Promise<void>;
   isRestaurantSuspended: boolean;
+  updateRestaurantAvailability: (accepting: boolean) => Promise<void>;
+  updateRestaurantProfile: (details: Pick<RestaurantData, 'name' | 'address' | 'phone' | 'open_hours' | 'closed_message'>) => Promise<void>;
 
   // Categories & Products from Supabase
   categories: Category[];
@@ -116,6 +121,9 @@ const DEFAULT_RESTAURANT: RestaurantData = {
   min_delivery_amount: RESTAURANT_INFO.minDeliveryAmount,
   max_cash_amount: 500,
   is_active: true,
+  is_open: true,
+  open_hours: '',
+  closed_message: '',
 };
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -123,6 +131,7 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [language, setLanguageState] = useState<Language>('fr');
   const [restaurant, setRestaurant] = useState<RestaurantData>(DEFAULT_RESTAURANT);
+  const restaurantMutationVersion = useRef(0);
   const [availableRestaurants, setAvailableRestaurants] = useState<{ id: string; slug: string; name: string }[]>([]);
   const [products, setProducts] = useState<Product[]>(FALLBACK_PRODUCTS);
   const [categories, setCategories] = useState<Category[]>(FALLBACK_CATEGORIES);
@@ -219,6 +228,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         min_delivery_amount: Number(restoData.min_delivery_amount ?? 50),
         max_cash_amount: Number(restoData.max_cash_amount ?? 500),
         is_active: restoData.is_active,
+        is_open: restoData.is_open ?? true,
+        open_hours: restoData.open_hours || '',
+        closed_message: restoData.closed_message || '',
       });
 
       // 3. Fetch categories of this restaurant
@@ -319,12 +331,36 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     loadRestaurant(slug);
   };
 
+  // Refresh public restaurant state on existing tabs, even without Realtime setup.
+  useEffect(() => {
+    let active = true;
+    const refresh = async () => {
+      if (document.hidden) return;
+      const revision = restaurantMutationVersion.current;
+      const { data, error } = await supabase.from('restaurants')
+        .select('id,name,address,phone,open_hours,is_open,closed_message,is_active,delivery_fee,min_delivery_amount,whatsapp_number,max_cash_amount')
+        .eq('id', restaurant.id).maybeSingle();
+      if (!active || error || revision !== restaurantMutationVersion.current) return;
+      if (!data) { setRestaurant(prev => prev.id === restaurant.id ? { ...prev, is_active: false } : prev); return; }
+      setAvailableRestaurants(prev => prev.map(item => item.id === data.id ? { ...item, name: data.name } : item));
+      setRestaurant(prev => prev.id === data.id ? { ...prev, ...data,
+        delivery_fee: Number(data.delivery_fee ?? 0), min_delivery_amount: Number(data.min_delivery_amount ?? 0),
+        max_cash_amount: Number(data.max_cash_amount ?? 500), open_hours: data.open_hours || '', closed_message: data.closed_message || '' } : prev);
+    };
+    const onFocus = () => { void refresh().catch(() => {}); };
+    const timer = setInterval(onFocus, 30000);
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onFocus);
+    return () => { active = false; clearInterval(timer); window.removeEventListener('focus', onFocus); document.removeEventListener('visibilitychange', onFocus); };
+  }, [restaurant.id]);
+
   const addToCart = (
     product: Product,
     selectedOptions: SelectedOptionChoice[],
     quantity: number,
     instructions?: string
   ) => {
+    if (!restaurant.is_open || !restaurant.is_active) return;
     const optionsTotal = selectedOptions.reduce((acc, opt) => acc + opt.price, 0);
     const unitPrice = product.price + optionsTotal;
     const totalPrice = unitPrice * quantity;
@@ -476,10 +512,27 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setCategories(prev => prev.filter(c => c.id !== categoryId));
   };
 
+  const updateRestaurantAvailability = async (accepting: boolean) => {
+    const tenant = restaurant.id;
+    const { data, error } = await supabase.rpc('update_restaurant_availability', { tenant, accepting });
+    if (error || typeof data !== 'boolean') throw new Error('Modification de l’ouverture refusée.');
+    restaurantMutationVersion.current += 1;
+    setRestaurant(prev => prev.id === tenant ? { ...prev, is_open: data } : prev);
+  };
+  const updateRestaurantProfile = async (details: Pick<RestaurantData, 'name' | 'address' | 'phone' | 'open_hours' | 'closed_message'>) => {
+    const tenant = restaurant.id;
+    const { data, error } = await supabase.rpc('update_restaurant_profile', { tenant, details });
+    if (error || !data) throw new Error('Enregistrement de la fiche refusé. Vérifiez les champs.');
+    restaurantMutationVersion.current += 1;
+    setRestaurant(prev => prev.id === tenant ? { ...prev, ...data } : prev);
+    setAvailableRestaurants(prev => prev.map(item => item.id === tenant ? { ...item, name: data.name } : item));
+  };
+
   const updateRestaurantSettings = async (fee: number, minimum: number, whatsapp: string) => {
     const tenant = restaurant.id;
     const { data, error } = await supabase.rpc('update_restaurant_settings', { tenant, fee, minimum, whatsapp });
     if (error || !data) throw new Error('Enregistrement refusé. Vérifiez les montants et le numéro WhatsApp.');
+    restaurantMutationVersion.current += 1;
     setRestaurant(prev => prev.id === tenant ? { ...prev, delivery_fee: Number(data.delivery_fee),
       min_delivery_amount: Number(data.min_delivery_amount), whatsapp_number: data.whatsapp_number } : prev);
   };
@@ -487,6 +540,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const updateCashLimit = async (amount: number) => {
     const { data, error } = await supabase.rpc('update_cash_limit', { tenant: restaurant.id, amount });
     if (error || data == null) throw new Error('Enregistrement du plafond refusé.');
+    restaurantMutationVersion.current += 1;
     setRestaurant(prev => ({ ...prev, max_cash_amount: Number(data) }));
   };
 
@@ -502,6 +556,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         switchRestaurant,
         updateCashLimit,
         updateRestaurantSettings,
+        updateRestaurantAvailability,
+        updateRestaurantProfile,
         isRestaurantSuspended: !restaurant.is_active,
         categories,
         setCategories,

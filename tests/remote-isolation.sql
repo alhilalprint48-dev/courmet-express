@@ -66,6 +66,19 @@ BEGIN
   'items',jsonb_build_array(jsonb_build_object('productId',pa,'quantity',1,'options','[]'::jsonb))),NULL);
  IF (delivery->>'delivery_fee')::numeric<>0 OR (delivery->>'total')::numeric<>42 THEN RAISE EXCEPTION 'Nouveaux frais non appliqués au checkout'; END IF;
  EXECUTE 'SET LOCAL ROLE authenticated';
+ PERFORM public.update_restaurant_profile(a,jsonb_build_object('name','TEST PROFIL','address','TEST ADRESSE','phone','+212600000098','open_hours','11:30–23:30','closed_message','TEST FERMETURE'));
+ IF (SELECT name FROM public.restaurants WHERE id=a)<>'TEST PROFIL' THEN RAISE EXCEPTION 'Fiche non enregistrée'; END IF;
+ PERFORM public.update_restaurant_availability(a,false);
+ EXECUTE 'RESET ROLE';
+ BEGIN
+  PERFORM public.server_create_order(jsonb_build_object('restaurantId',a,'mode','dine_in','tableNumber','TEST FERME',
+   'customer',jsonb_build_object('paymentMethod','cash'),'items',jsonb_build_array(jsonb_build_object('productId',pa,'quantity',1))),NULL);
+  RAISE EXCEPTION 'Commande acceptée restaurant fermé';
+ EXCEPTION WHEN OTHERS THEN IF SQLERRM NOT LIKE 'Restaurant fermé%' THEN RAISE; END IF; END;
+ IF (SELECT is_open FROM public.restaurants WHERE id=b) IS NOT TRUE THEN RAISE EXCEPTION 'Fermeture affecte un autre restaurant'; END IF;
+ EXECUTE 'SET LOCAL ROLE authenticated';
+ PERFORM public.update_restaurant_availability(a,true);
+ EXECUTE 'SET LOCAL ROLE authenticated';
  EXECUTE 'RESET ROLE';
  PERFORM set_config('request.jwt.claim.sub',ub::text,true);
  EXECUTE 'SET LOCAL ROLE authenticated';

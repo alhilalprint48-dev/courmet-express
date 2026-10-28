@@ -11,12 +11,12 @@ interface ProductCardProps {
 }
 
 export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
-  const { language, t, openProductModal, addToCart } = useApp();
+  const { restaurant, language, t, openProductModal, addToCart } = useApp();
 
   const hasOptions = product.optionGroups && product.optionGroups.length > 0;
 
   const handleAction = () => {
-    if (!product.isAvailable) return;
+    if (!product.isAvailable || !restaurant.is_open) return;
     if (hasOptions) {
       openProductModal(product);
     } else {
@@ -98,10 +98,10 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
         {/* Action Bottom */}
         <div className="mt-4 pt-3 border-t border-gray-50 flex items-center justify-between">
           <span className="text-xs font-semibold text-gray-400">
-            {hasOptions ? t.product.customize : t.product.addToCart}
+            {!restaurant.is_open ? (language === 'ar' ? 'المطعم مسدود' : 'Restaurant fermé') : hasOptions ? t.product.customize : t.product.addToCart}
           </span>
           <button
-            disabled={!product.isAvailable}
+            disabled={!product.isAvailable || !restaurant.is_open}
             className={`w-9 h-9 rounded-2xl flex items-center justify-center transition-all ${
               !product.isAvailable
                 ? 'bg-gray-200 text-gray-400'

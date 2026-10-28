@@ -113,6 +113,7 @@ export const Header: React.FC = () => {
 
           {/* Cart Button */}
           <button
+            disabled={!restaurant.is_open}
             onClick={() => setIsCheckoutOpen(true)}
             className="relative flex items-center gap-1.5 sm:gap-2 bg-primary-600 hover:bg-primary-700 text-white font-bold px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl shadow-md shadow-primary-600/25 transition-transform active:scale-95 shrink-0"
           >
@@ -125,7 +126,7 @@ export const Header: React.FC = () => {
               )}
             </div>
             <span className="text-xs sm:text-sm font-black">
-              {total > 0 ? `${total} ${t.currency}` : t.cart.title}
+              {!restaurant.is_open ? (language === 'ar' ? 'مسدود' : 'Fermé') : total > 0 ? `${total} ${t.currency}` : t.cart.title}
             </span>
           </button>
           </div>

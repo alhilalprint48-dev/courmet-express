@@ -24,7 +24,6 @@ import {
   CheckCircle2
 } from 'lucide-react';
 import { PaymentMethod } from '@/types';
-import { RESTAURANT_INFO } from '@/data/mockData';
 import { normalizePhone } from '@/lib/phone';
 
 export const CheckoutModal: React.FC = () => {
@@ -96,6 +95,10 @@ export const CheckoutModal: React.FC = () => {
     if (isSubmitting) return;
     e.preventDefault();
     setErrorMessage(null);
+    if (!restaurant.is_open || !restaurant.is_active) {
+      setErrorMessage(language === 'ar' ? 'المطعم مسدود دابا، الطلبات موقفين مؤقتاً.' : 'Restaurant fermé. Les commandes sont temporairement indisponibles.');
+      return;
+    }
 
     if (!captchaToken) { setErrorMessage(language === 'ar' ? 'أكد التحقق ضد الروبو.' : 'Validez le contrôle anti-robot.'); return; }
     const isDineIn = mode === 'dine_in';
@@ -162,7 +165,7 @@ export const CheckoutModal: React.FC = () => {
     await placeOrder({
       fullName: finalFullName,
       phone: cleanedPhone,
-      address: isDineIn ? `Sur place - ${tableNumber}` : mode === 'delivery' ? address.trim() : RESTAURANT_INFO.address,
+      address: isDineIn ? `Sur place - ${tableNumber}` : mode === 'delivery' ? address.trim() : restaurant.address,
       landmark: landmark.trim() || undefined,
       specialInstructions: instructions.trim() || undefined,
       paymentMethod,
@@ -586,10 +589,11 @@ export const CheckoutModal: React.FC = () => {
               {/* Submit CTA */}
               <button
                 type="submit"
+                disabled={isSubmitting || !restaurant.is_open}
                 className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-black py-4 px-4 rounded-2xl shadow-lg shadow-emerald-600/30 flex items-center justify-between text-base transition-all active:scale-[0.99] mt-4"
               >
                 <span>
-                  {mode === 'dine_in'
+                  {!restaurant.is_open ? (language === 'ar' ? 'المطعم مسدود' : 'Restaurant fermé') : mode === 'dine_in'
                     ? (language === 'ar' ? `إرسال الطلب للمطبخ (${tableNumber}) ⚡` : `Envoyer en cuisine (${tableNumber}) ⚡`)
                     : t.checkout.placeOrder}
                 </span>

@@ -338,5 +338,58 @@ try {
   eq('best sellers use quantities from completed monthly orders',stats.top_products.map(p=>[p.name,Number(p.quantity),Number(p.revenue)]),[['Best seller',2,100],['Deleted product',1,50]]);
   await as('postgres');
   eq('no public security definer in admin features',(await db.query("SELECT count(*)::int AS n FROM pg_proc p JOIN pg_namespace ns ON ns.oid=p.pronamespace WHERE ns.nspname='public' AND prosecdef")).rows[0].n,0);
+  await as('postgres');
+  const profileMigration=readFileSync(new URL('../supabase-restaurant-profile.sql',import.meta.url),'utf8');
+  await sql(profileMigration); await sql(profileMigration);
+  const availability=(tenant,accepting)=>db.query('SELECT public.update_restaurant_availability($1,$2) AS result',[tenant,accepting]);
+  const baseProfile={name:'Restaurant actualisé',address:'Adresse actualisée',phone:'+212611223344',open_hours:'Lun–sam 11:30–23:30',closed_message:'Réouverture à 18 h.'};
+  const profile=(tenant,details=baseProfile)=>db.query('SELECT public.update_restaurant_profile($1,$2) AS result',[tenant,JSON.stringify(details)]);
+  await as('anon');
+  await reject('anonymous cannot close restaurant',()=>availability(c,false),/permission denied/);
+  await reject('anonymous cannot edit profile',()=>profile(c),/permission denied/);
+  for (const user of [ids.customer,ids.kitchen,ids.driver]) {
+    await as('authenticated',user);
+    await reject('non-admin cannot change opening '+user,()=>availability(c,false),/refusée/);
+    await reject('non-admin cannot edit profile '+user,()=>profile(c),/refusée/);
+  }
+  await as('authenticated',ids.manager);
+  await reject('admin cannot close foreign restaurant',()=>availability(d,false),/refusée/);
+  await reject('admin cannot edit foreign profile',()=>profile(d),/refusée/);
+  await reject('opening state cannot be null',()=>availability(c,null),/invalide/);
+  for (const bad of [{name:''},{address:''},{phone:'bad'},{open_hours:''},{name:'x'.repeat(256)},{open_hours:'x'.repeat(129)},{closed_message:'x'.repeat(301)}]) {
+    await reject('invalid profile '+Object.keys(bad)[0],()=>profile(c,{...baseProfile,...bad}),/invalides|invalide/);
+  }
+  const actualProfile=(await profile(c,{...baseProfile,is_active:false,max_cash_amount:1})).rows[0].result;
+  eq('profile saves name and hours',actualProfile.name,baseProfile.name);
+  eq('profile saves phone',actualProfile.phone,baseProfile.phone);
+  eq('profile saves address',actualProfile.address,baseProfile.address);
+  eq('profile saves closed message',actualProfile.closed_message,baseProfile.closed_message);
+  eq('profile cannot change platform suspension',(await db.query('SELECT is_active FROM public.restaurants WHERE id=$1',[c])).rows[0].is_active,true);
+  eq('profile cannot change payment settings',Number((await db.query('SELECT max_cash_amount FROM public.restaurants WHERE id=$1',[c])).rows[0].max_cash_amount),500);
+  await availability(c,false);
+  await as('anon');
+  const closed=(await db.query('SELECT is_open,name,open_hours,closed_message FROM public.restaurants WHERE id=$1',[c])).rows[0];
+  eq('closed restaurant menu stays publicly visible',closed.is_open,false);
+  eq('public profile reflects saved information',closed.name,baseProfile.name);
+  eq('public hours reflect saved information',closed.open_hours,baseProfile.open_hours);
+  await as('service_role');
+  for (const mode of ['dine_in','delivery','takeaway']) {
+    const payload=order({restaurantId:c,mode,tableNumber:'Closed '+mode,customer:{fullName:'Test',phone:'0677554411',address:'Adresse',paymentMethod:'cash'},items:[{productId:pc,quantity:1}],is_open:true});
+    await reject('server refuses closed '+mode+' even with forged opening',()=>serverCreate(payload),/Restaurant fermé/);
+  }
+  const stillOpen=(await serverCreate(cashOrder('Other restaurant open',{restaurantId:ids.b,items:[{productId:ids.foreign,quantity:1}]}))).rows[0].result;
+  eq('closing one restaurant does not close another',Number(stillOpen.total),80);
+  await as('authenticated',ids.manager);
+  await availability(c,true);
+  await as('service_role');
+  const reopened=(await serverCreate(order({restaurantId:c,mode:'dine_in',tableNumber:'Reopened',customer:{phone:'',paymentMethod:'cash'},items:[{productId:pc,quantity:1}]}))).rows[0].result;
+  eq('reopening restores orders',reopened.status,'new');
+  await as('postgres');
+  await db.query('UPDATE public.restaurants SET is_active=false,is_open=false WHERE id=$1',[c]);
+  await as('authenticated',ids.manager);
+  await reject('admin opening cannot bypass suspension',()=>availability(c,true),/suspendu/);
+  await as('postgres');
+  eq('profile migration preserves direct order RPC closure',(await db.query("SELECT has_function_privilege('anon','public.create_order(jsonb)','EXECUTE') AS allowed")).rows[0].allowed,false);
+  eq('profile adds no public security definer',(await db.query("SELECT count(*)::int AS n FROM pg_proc p JOIN pg_namespace ns ON ns.oid=p.pronamespace WHERE ns.nspname='public' AND prosecdef")).rows[0].n,0);
   console.log(`\n${checks} security checks passed (isolated PostgreSQL; no production calls).`);
 } catch (error) { console.error(error.message, error.where || ''); process.exitCode = 1; } finally { await db.close(); }
