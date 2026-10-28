@@ -135,3 +135,12 @@ Un mot de passe trouvé dans les fuites est refusé avant l’appel d’inscript
 **Portée :** cette couche protège les formulaires du site. Elle peut être contournée par un appel direct à l’API Auth publique et ne remplace pas la protection serveur native de Supabase. L’avertissement Security Advisor reste donc légitime tant que la protection native n’est pas activée sur une offre compatible. Aucun abonnement payant n’est souscrit par cette modification. Un résultat absent du corpus ne prouve pas qu’un mot de passe est sûr.
 
 Vérification locale : `npm run test:passwords` (réponses et pannes simulées, aucun secret réel ni création de compte).
+
+
+### Erreurs de chargement et vérification des accès
+
+Les espaces du personnel distinguent un compte sans autorisation d’une vérification impossible (Auth, initialisation du rôle ou RPC indisponible). Une panne masque l’espace et propose une nouvelle vérification ; elle ne reste pas sur un chargement sans fin. La base conserve ses propres contrôles d’accès, indépendamment de cet affichage.
+
+Mon compte attend le chargement du restaurant avant d’affirmer que l’historique est vide. Si le restaurant ne charge pas, un message et un bouton de rechargement remplacent cette affirmation. Les erreurs de consultation de commandes restent également signalées.
+
+Tests : `npm run test:access`. Les scénarios réseau et rôles utilisent des fournisseurs simulés, sans création de compte ni changement de permissions.

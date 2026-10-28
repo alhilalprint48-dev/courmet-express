@@ -25,6 +25,7 @@ jobs:
       - run: npm run test:checkout
       - run: npm run test:operations
       - run: npm run test:passwords
+      - run: npm run test:access
       - run: npm run build
       - name: Verify Nginx configuration and response headers
         run: |

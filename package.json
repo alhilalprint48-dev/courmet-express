@@ -11,7 +11,8 @@
     "audit:anonymous": "node src/scripts/audit-test.mjs",
     "test:checkout": "node tests/checkout-server.mjs",
     "test:operations": "node tests/operations-client.mjs",
-    "test:passwords": "node tests/password-safety.mjs"
+    "test:passwords": "node tests/password-safety.mjs",
+    "test:access": "node tests/staff-access.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "2.118.0",
