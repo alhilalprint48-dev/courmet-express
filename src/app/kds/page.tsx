@@ -23,193 +23,67 @@ import {
   History
 } from 'lucide-react';
 import { Order, OrderStatus } from '@/types';
-import { RESTAURANT_INFO } from '@/data/mockData';
+import { useApp } from '@/context/AppContext';
+import { useStaffOrders } from '@/hooks/useStaffOrders';
+import { ServiceConnection } from '@/components/ServiceConnection';
+import { unseenOrderIds } from '@/lib/order-utils.mjs';
 import { supabase } from '@/lib/supabase';
 import { StaffAuthGate } from '@/components/StaffAuthGate';
 
 function KdsPage() {
-  const [orders, setOrders] = useState<Order[]>([]);
+  const { restaurant } = useApp();
+  const [showArchives, setShowArchives] = useState(false);
+  const queue = useStaffOrders(restaurant.id, false, showArchives);
+  const orders = queue.orders;
+  const manager = ['admin', 'superadmin'].includes(queue.role);
   const [kdsTab, setKdsTab] = useState<'active' | 'completed'>('active');
-  const [soundEnabled, setSoundEnabled] = useState(true);
+  const [soundEnabled, setSoundEnabled] = useState(false);
   const [selectedTicketOrder, setSelectedTicketOrder] = useState<Order | null>(null);
   const [ticketType, setTicketType] = useState<'kitchen' | 'delivery'>('kitchen');
-  const previousOrdersCount = React.useRef<number>(0);
-
-  // Audio beep generator using Web Audio API (no external asset needed)
+  const seenIds = React.useRef(new Set<string>());
+  const audio = React.useRef<AudioContext | null>(null);
+  const [actionError, setActionError] = useState('');
+  useEffect(() => { seenIds.current = new Set(); }, [restaurant.id]);
   const playAlertSound = useCallback(() => {
-    if (!soundEnabled || typeof window === 'undefined') return;
+    const context = audio.current;
+    if (!context || context.state !== 'running') return;
+    const osc = context.createOscillator(), gain = context.createGain();
+    osc.connect(gain); gain.connect(context.destination);
+    osc.frequency.setValueAtTime(880, context.currentTime); gain.gain.setValueAtTime(0.2, context.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, context.currentTime + 0.4); osc.start(); osc.stop(context.currentTime + 0.4);
+  }, []);
+  const activateSound = async () => {
     try {
-      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-      const osc = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
-      osc.connect(gain);
-      gain.connect(audioCtx.destination);
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(880, audioCtx.currentTime); // A5 note
-      osc.frequency.setValueAtTime(1200, audioCtx.currentTime + 0.15); // High beep
-      gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.4);
-      osc.start();
-      osc.stop(audioCtx.currentTime + 0.4);
-    } catch (e) {
-      console.warn("Audio Context blocked:", e);
-    }
-  }, [soundEnabled]);
-
-  // Fetch persisted orders; authorization is enforced by Supabase RLS.
-  const fetchOrders = useCallback(async () => {
-    try {
-      // 1. Fetch from Supabase
-      const { data: supaOrders, error: supaErr } = await supabase
-        .from('orders')
-        .select(`
-          *,
-          order_items (*)
-        `)
-        .order('created_at', { ascending: false })
-        .limit(35);
-
-      if (supaOrders && supaOrders.length > 0) {
-        const mappedOrders: Order[] = supaOrders.map((o) => {
-          const createdAtDate = new Date(o.created_at);
-          const timeStr = createdAtDate.toLocaleTimeString('fr-FR', {
-            hour: '2-digit',
-            minute: '2-digit',
-          });
-
-          const items = (o.order_items || []).map((oi: any) => ({
-            cartItemId: oi.id,
-            product: {
-              id: oi.product_id || oi.id,
-              categoryId: '',
-              name: { fr: oi.product_name_fr, ar: oi.product_name_fr },
-              description: { fr: '', ar: '' },
-              price: Number(oi.unit_price) || 0,
-              image: '',
-              allergens: [],
-              isAvailable: true,
-            },
-            selectedOptions: (oi.selected_options || []).map((so: any) => ({
-              groupId: so.groupId || '',
-              groupName: so.groupName || { fr: '', ar: '' },
-              optionId: so.optionId || '',
-              optionName: so.optionName || { fr: so.optionName?.fr || '', ar: '' },
-              price: Number(so.price) || 0,
-            })),
-            quantity: Number(oi.quantity) || 1,
-            unitPrice: Number(oi.unit_price) || 0,
-            totalPrice: Number(oi.total_price) || 0,
-            specialInstructions: oi.special_instructions,
-          }));
-
-          // Fallback if order_items was not yet populated for older records
-          const finalItems = items.length > 0 ? items : [
-            {
-              cartItemId: o.id + '_gen',
-              product: {
-                id: 'prod_gen',
-                categoryId: '',
-                name: { 
-                  fr: o.mode === 'dine_in' 
-                    ? `Commande Sur Place (${o.table_number || 'À Table'})` 
-                    : `Commande ${o.mode === 'delivery' ? 'Livraison' : 'À emporter'}`, 
-                  ar: '' 
-                },
-                description: { fr: '', ar: '' },
-                price: Number(o.subtotal) || Number(o.total) || 0,
-                image: '',
-                allergens: [],
-                isAvailable: true,
-              },
-              selectedOptions: [],
-              quantity: 1,
-              unitPrice: Number(o.subtotal) || Number(o.total) || 0,
-              totalPrice: Number(o.subtotal) || Number(o.total) || 0,
-              specialInstructions: o.special_instructions,
-            }
-          ];
-
-          return {
-            id: o.id,
-            orderNumber: o.order_number,
-            createdAt: timeStr,
-            status: o.status as OrderStatus,
-            mode: o.mode,
-            tableNumber: o.table_number || (o.mode === 'dine_in' ? 'Table' : undefined),
-            items: finalItems,
-            discountAmount: Number(o.discount_amount || 0), pointsRedeemed: Number(o.points_redeemed || 0),
-            subtotal: Number(o.subtotal) || 0,
-            deliveryFee: Number(o.delivery_fee) || 0,
-            total: Number(o.total) || 0,
-            customer: {
-              fullName: o.customer_name || 'Client',
-              phone: o.customer_phone || '-',
-              address: o.customer_address || '',
-              landmark: o.customer_landmark,
-              specialInstructions: o.special_instructions,
-              deliveryTimeSlot: o.delivery_timeslot,
-              paymentMethod: o.payment_method || 'cash',
-              cashChangeAmount: o.cash_change_amount,
-              gpsCoords: o.gps_lat ? { lat: Number(o.gps_lat), lng: Number(o.gps_lng) } : undefined,
-            },
-          };
-        });
-
-        // Trigger alert if new orders arrived
-        if (previousOrdersCount.current > 0 && mappedOrders.length > previousOrdersCount.current) {
-          playAlertSound();
-        }
-        previousOrdersCount.current = mappedOrders.length;
-        setOrders(mappedOrders);
-        return;
-      }
-
-      setOrders([]);
-    } catch (e) {
-      console.warn("Failed to fetch KDS orders:", e);
-    }
-  }, [playAlertSound]);
-
+      if (!audio.current) audio.current = new window.AudioContext();
+      await audio.current.resume(); setSoundEnabled(true); playAlertSound();
+    } catch { setActionError('Son indisponible : gardez les alertes visuelles à l’écran.'); }
+  };
   useEffect(() => {
-    fetchOrders();
-    const interval = setInterval(fetchOrders, 3000);
-
-    // Supabase Realtime channel subscription for instant live push
-    const channel = supabase
-      .channel('kds-live-orders')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'orders' },
-        () => {
-          fetchOrders();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      clearInterval(interval);
-      supabase.removeChannel(channel);
-    };
-  }, [fetchOrders]);
-
-  const updateOrderStatus = async (orderId: string, nextStatus: OrderStatus) => {
-    const { data, error } = await supabase.from('orders').update({ status: nextStatus }).eq('id', orderId).select('id');
-    if (error || !data?.length) alert('Modification refusée. Vérifiez vos droits et le statut.');
-    await fetchOrders();
+    if (soundEnabled && unseenOrderIds(seenIds.current, orders).length) playAlertSound();
+    for (const order of orders) seenIds.current.add(order.id);
+  }, [orders, soundEnabled, playAlertSound]);
+  useEffect(() => () => { void audio.current?.close(); }, []);
+  const perform = async (target: string | null, action: string, note: string | null = null) => {
+    setActionError('');
+    const { error } = await supabase.rpc('order_action', { tenant: restaurant.id, target, action, note });
+    if (error) setActionError(error.message || 'Action refusée.');
+    queue.refresh();
   };
-
-  const deleteOrder = async (orderId: string) => {
-    if (!window.confirm('Supprimer cette commande ? Cette action est réservée au gérant.')) return;
-    const { data, error } = await supabase.from('orders').delete().eq('id', orderId).select('id');
-    if (error || !data?.length) alert('Suppression refusée. Seul le gérant peut supprimer une commande.');
-    await fetchOrders();
+  const updateOrderStatus = async (id: string, status: OrderStatus) => {
+    const order = orders.find(item => item.id === id);
+    const action = status === 'preparing' ? (order?.status === 'ready' ? 'undo_ready' : 'prepare') : status === 'ready' ? 'ready' : status === 'delivered' ? 'complete' : 'claim';
+    await perform(id, action, action === 'complete' ? 'payment_confirmed' : null);
   };
-  const clearDeliveredOrders = async () => {
-    if (!window.confirm('Supprimer les commandes terminées ? Action réservée au gérant.')) return;
-    const { data, error } = await supabase.from('orders').delete().eq('status', 'delivered').select('id');
-    if (error || !data?.length) alert('Aucune commande supprimée. Vérifiez vos droits.');
-    await fetchOrders();
+  const deleteOrder = async (id: string) => {
+    const order = orders.find(item => item.id === id);
+    if (!order) return;
+    if (['delivered','cancelled'].includes(order.status)) await perform(id, order.archivedAt ? 'unarchive' : 'archive');
+    else {
+      const reason = window.prompt('Motif d’annulation (la commande restera dans l’historique) :');
+      if (reason) await perform(id, 'cancel', reason);
+    }
   };
+  const clearDeliveredOrders = async () => { await perform(null, 'archive_completed'); };
 
   const handlePrint = (order: Order, type: 'kitchen' | 'delivery') => {
     setSelectedTicketOrder(order);
@@ -236,9 +110,10 @@ function KdsPage() {
       case 'delivered':
         return (
           <span className="bg-emerald-600 text-white text-xs font-black px-2.5 py-1 rounded-full">
-            {mode === 'dine_in' ? 'SERVIE & RÉGLÉE' : mode === 'takeaway' ? 'RÉCUPÉRÉE' : 'LIVRÉE & PAYÉE'}
+            CLÔTURÉE
           </span>
         );
+      case 'cancelled': return <span className="bg-slate-600 text-white text-xs rounded px-2 py-1">ANNULÉE</span>;
       default:
         return null;
     }
@@ -262,7 +137,7 @@ function KdsPage() {
               <ChefHat className="w-6 h-6" />
             </div>
             <div>
-              <h1 className="text-xl font-black tracking-tight">KDS & Écran Caisse</h1>
+              <h1 className="text-xl font-black tracking-tight">{restaurant.name} — Cuisine</h1>
               <p className="text-xs text-slate-400">Flux de production temps réel & Impression tickets 80mm</p>
             </div>
           </div>
@@ -271,20 +146,17 @@ function KdsPage() {
         {/* Controls */}
         <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           <button
-            onClick={() => {
-              setSoundEnabled(!soundEnabled);
-              if (!soundEnabled) playAlertSound();
-            }}
+            onClick={() => { if (soundEnabled) setSoundEnabled(false); else void activateSound(); }}
             className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-bold transition-colors ${
               soundEnabled ? 'bg-emerald-600/20 text-emerald-400 border border-emerald-500/30' : 'bg-slate-800 text-slate-400'
             }`}
           >
             {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
-            <span>Son {soundEnabled ? 'ON' : 'OFF'}</span>
+            <span>{soundEnabled ? 'Son activé' : 'Activer les alertes sonores'}</span>
           </button>
 
           <button
-            onClick={playAlertSound}
+            onClick={activateSound}
             className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-300 border border-slate-700"
           >
             Test Bip
@@ -292,10 +164,13 @@ function KdsPage() {
         </div>
       </div>
 
+      <ServiceConnection loading={queue.loading} error={queue.error} lastSuccess={queue.lastSuccess} refresh={queue.refresh} />
+      {actionError && <p role="alert" className="p-3 bg-red-950 text-red-200">{actionError}</p>}
+      <label className="print:hidden text-xs flex gap-2 items-center my-2"><input type="checkbox" checked={showArchives} onChange={event => { setShowArchives(event.target.checked); setKdsTab('completed'); }} />Consulter les archives (50 dernières commandes)</label>
       {/* Filter Tabs: En Cuisine vs Terminées */}
       {(() => {
         const activeOrders = orders.filter((o) => o.status !== 'delivered' && o.status !== 'cancelled');
-        const completedOrders = orders.filter((o) => o.status === 'delivered');
+        const completedOrders = orders.filter((o) => ['delivered','cancelled'].includes(o.status));
         const displayedOrders = kdsTab === 'active' ? activeOrders : completedOrders;
 
         return (
@@ -346,21 +221,21 @@ function KdsPage() {
               </div>
 
               {/* Action on completed tab: Purge history */}
-              {kdsTab === 'completed' && completedOrders.length > 0 && (
+              {kdsTab === 'completed' && completedOrders.length > 0 && manager && !showArchives && (
                 <button
                   type="button"
                   onClick={clearDeliveredOrders}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-red-950/40 hover:bg-red-900/60 text-red-300 border border-red-800/50 text-xs font-bold transition-colors"
                 >
                   <Trash2 className="w-3.5 h-3.5" />
-                  <span>Purger tout l&apos;historique ({completedOrders.length})</span>
+                  <span>Archiver les commandes terminées</span>
                 </button>
               )}
             </div>
 
             {/* Orders Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pt-6 flex-1">
-              {displayedOrders.length === 0 ? (
+              {queue.loading && orders.length === 0 ? <p role="status">Chargement…</p> : queue.error && orders.length === 0 ? <p>Commandes indisponibles. Réessayez avant de conclure que la file est vide.</p> : displayedOrders.length === 0 ? (
                 <div className="col-span-full py-16 text-center bg-slate-800/40 border border-slate-700/60 rounded-3xl p-8">
                   {kdsTab === 'active' ? (
                     <>
@@ -377,7 +252,7 @@ function KdsPage() {
                       <div className="w-14 h-14 bg-slate-700/50 text-slate-400 rounded-full flex items-center justify-center mx-auto mb-3">
                         <History className="w-7 h-7" />
                       </div>
-                      <h3 className="text-lg font-black text-white">Aucune commande terminée dans l&apos;historique</h3>
+                      <h3 className="text-lg font-black text-white">Aucune commande terminée non archivée</h3>
                       <p className="text-xs text-slate-400 mt-1 max-w-sm mx-auto">
                         Dès qu&apos;une commande sur place est marquée &quot;Servie à table&quot; ou qu&apos;une livraison est clôturée, elle sera automatiquement déplacée ici.
                       </p>
@@ -426,9 +301,10 @@ function KdsPage() {
                     </span>
                   </div>
                   <button
+                    disabled={!manager && ['delivered','cancelled'].includes(order.status)}
                     onClick={() => deleteOrder(order.id)}
                     className="p-2 rounded-xl bg-red-500/10 hover:bg-red-500/30 text-red-400 hover:text-red-200 transition-colors ml-1"
-                    title="Supprimer cette commande"
+                    title="Annuler ou archiver cette commande"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
@@ -517,7 +393,7 @@ function KdsPage() {
                 </div>
 
                 {/* Status Advancement Button tailored per mode */}
-                {order.status === 'new' && (
+                {['new','accepted'].includes(order.status) && (
                   <button
                     onClick={() => updateOrderStatus(order.id, 'preparing')}
                     className="w-full bg-orange-600 hover:bg-orange-500 text-white text-xs font-black py-2.5 rounded-xl transition-colors"
@@ -546,7 +422,7 @@ function KdsPage() {
                     className="w-full bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black py-2.5 rounded-xl transition-colors flex items-center justify-center gap-1.5 shadow-md shadow-emerald-900/30"
                   >
                     <CheckCircle className="w-4 h-4" />
-                    <span>Servie à la {order.tableNumber || 'Table'} & Clôturer</span>
+                    <span>Paiement reçu : servir à la {order.tableNumber || 'Table'} & clôturer</span>
                   </button>
                 )}
 
@@ -562,17 +438,17 @@ function KdsPage() {
                 )}
 
                 {/* DELIVERY ONLY: Assign to Courier */}
-                {order.status === 'ready' && order.mode === 'delivery' && (
+                {order.status === 'ready' && order.mode === 'delivery' && manager && (
                   <button
                     onClick={() => updateOrderStatus(order.id, 'delivering')}
                     className="w-full bg-purple-600 hover:bg-purple-500 text-white text-xs font-black py-2.5 rounded-xl transition-colors flex items-center justify-center gap-1.5 shadow-md shadow-purple-900/30"
                   >
                     <Bike className="w-4 h-4" />
-                    <span>Assigner au Livreur (En cours de route)</span>
+                    <span>Prendre cette course avec mon compte</span>
                   </button>
                 )}
 
-                {order.status === 'delivering' && order.mode === 'delivery' && (
+                {order.status === 'delivering' && order.mode === 'delivery' && order.assignedDriverId === queue.userId && (
                   <button
                     onClick={() => updateOrderStatus(order.id, 'delivered')}
                     className="w-full bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-black py-2.5 rounded-xl transition-colors flex items-center justify-center gap-1.5"
@@ -585,17 +461,10 @@ function KdsPage() {
                 {order.status === 'delivered' && (
                   <div className="space-y-2">
                     <div className="text-center text-xs text-emerald-400 font-bold py-1 bg-emerald-950/40 rounded-xl border border-emerald-800/40">
-                      ✓ {order.mode === 'dine_in' ? 'Commande servie à table et archivée' : order.mode === 'takeaway' ? 'Commande remise au client et archivée' : 'Commande livrée et archivée'}
+                      ✓ {order.mode === 'dine_in' ? 'Commande servie à table et clôturée' : order.mode === 'takeaway' ? 'Commande remise au client et clôturée' : 'Commande livrée et clôturée'}
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => updateOrderStatus(order.id, 'preparing')}
-                      className="w-full bg-slate-700/80 hover:bg-slate-700 text-slate-300 hover:text-white text-xs font-bold py-1.5 rounded-xl transition-colors flex items-center justify-center gap-1.5"
-                      title="Remettre cette commande en cuisine si erreur"
-                    >
-                      <RotateCcw className="w-3.5 h-3.5" />
-                      <span>Remettre en cuisine</span>
-                    </button>
+                    <p className="text-xs text-slate-400">{order.paidAt ? `Encaissement tracé : ${order.paymentReceived} DH` : 'Commande historique : encaissement non tracé.'}</p>
+
                   </div>
                 )}
               </div>
@@ -633,9 +502,9 @@ function KdsPage() {
           `}</style>
 
           <div className="text-center border-b border-dashed border-black pb-2 mb-2">
-            <h2 className="text-sm font-black">{RESTAURANT_INFO.name.toUpperCase()}</h2>
-            <p className="text-[10px]">{RESTAURANT_INFO.address}</p>
-            <p className="text-[10px]">Tél: {RESTAURANT_INFO.phone}</p>
+            <h2 className="text-sm font-black">{restaurant.name.toUpperCase()}</h2>
+            <p className="text-[10px]">{restaurant.address}</p>
+            <p className="text-[10px]">Tél: {restaurant.phone}</p>
             <p className="font-bold text-base mt-1">
               *** TICKET {ticketType === 'kitchen' ? 'CUISINE' : selectedTicketOrder.mode === 'dine_in' ? 'ADDITION TABLE' : selectedTicketOrder.mode === 'takeaway' ? 'CAISSE / COMPTOIR' : 'LIVREUR & CLIENT'} ***
             </p>

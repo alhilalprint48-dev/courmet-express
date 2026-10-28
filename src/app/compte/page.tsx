@@ -18,6 +18,8 @@ export default function AccountPage() {
   const [checking, setChecking] = useState(true);
   const [busy, setBusy] = useState(false);
   const [signup, setSignup] = useState(false);
+  const [recovery, setRecovery] = useState(false);
+  const [passwordConfirmation, setPasswordConfirmation] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [message, setMessage] = useState('');
@@ -32,7 +34,7 @@ export default function AccountPage() {
       const { data: { user: signedIn } } = await supabase.auth.getUser();
       if (!active || current !== generation) return;
       setUser(signedIn); setRole(null); setPoints(null); setHistory([]);
-      if (signedIn) {
+      if (signedIn && restaurant.id) {
         await supabase.rpc('claim_platform_access');
         const [access, loyalty, orders] = await Promise.all([
           supabase.rpc('current_staff_role', { tenant: restaurant.id }),
@@ -49,7 +51,9 @@ export default function AccountPage() {
       if (active && current === generation) setChecking(false);
     };
     void load();
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(event => {
+      if (event === 'PASSWORD_RECOVERY') setRecovery(true);
+      if (event === 'SIGNED_OUT') setRecovery(false);
       ++generation; setUser(null); setRole(null); setPoints(null); setHistory([]); setChecking(true);
       setTimeout(() => { if (active) void load(); }, 0);
     });
@@ -60,6 +64,7 @@ export default function AccountPage() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.hash.slice(1));
+    if (params.get('type') === 'recovery') setRecovery(true);
     if (params.has('error')) {
       setMessage(ar ? 'رابط التأكيد سالات الصلاحية ديالو. طلب رابط جديد من هنا.' : 'Le lien de confirmation est invalide ou expiré. Demandez un nouveau lien ici.');
       window.history.replaceState(null, '', window.location.pathname);
@@ -87,6 +92,28 @@ export default function AccountPage() {
     } catch { setMessage(text('Envoi indisponible.', 'الإرسال ما خدامش دابا.')); }
     finally { setBusy(false); }
   };
+  const forgotPassword = async () => {
+    if (!email.trim()) { setMessage(text('Saisissez votre adresse e-mail.', 'دخل البريد الإلكتروني ديالك.')); return; }
+    setBusy(true); setMessage('');
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo: `${window.location.origin}/compte` });
+      setMessage(error ? text('Envoi indisponible. Réessayez plus tard.', 'الإرسال ما خدامش دابا. عاود من بعد.') : text('Si un compte correspond à cette adresse, vous recevrez un lien de réinitialisation.', 'إلا كان الحساب بهاد البريد، غادي يوصلك رابط تبديل كلمة السر.'));
+    } catch { setMessage(text('Envoi indisponible.', 'الإرسال ما خدامش دابا.')); }
+    finally { setBusy(false); }
+  };
+  const changePassword = async (event: React.FormEvent) => {
+    event.preventDefault(); setMessage('');
+    if (password.length < 12 || password !== passwordConfirmation) { setMessage(text('Les deux mots de passe doivent être identiques et contenir au moins 12 caractères.', 'خاص كلمتي السر يكونو بحال بحال وفيهم 12 حرف على الأقل.')); return; }
+    setBusy(true);
+    try {
+      const { error } = await supabase.auth.updateUser({ password });
+      if (error) throw error;
+      setPassword(''); setPasswordConfirmation(''); setRecovery(false);
+      setMessage(text('Mot de passe modifié.', 'كلمة السر تبدلات.'));
+      window.history.replaceState(null, '', window.location.pathname + window.location.search);
+    } catch { setMessage(text('Modification impossible. Demandez un nouveau lien de réinitialisation.', 'ما تبدلاتش كلمة السر. طلب رابط جديد.')); }
+    finally { setBusy(false); }
+  };
   const statuses: Record<string, string> = ar
     ? { new:'كيتسنى التأكيد', accepted:'تقبل', preparing:'كيتوجد', ready:'واجد', delivering:'فالطريق', delivered:'تسالا', cancelled:'تلغى' }
     : { new:'En attente', accepted:'Acceptée', preparing:'En préparation', ready:'Prête', delivering:'En livraison', delivered:'Terminée', cancelled:'Annulée' };
@@ -99,7 +126,12 @@ export default function AccountPage() {
       </div>
       <section className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-8 shadow-sm space-y-5">
         <div className="flex items-center gap-3"><UserRound className="text-orange-600" /><h1 className="text-2xl font-extrabold">{text('Mon compte','حسابي')}</h1></div>
-        {checking ? <p>{text('Vérification de la session…','كنتأكدو من الحساب…')}</p> : !user ? <>
+        {checking ? <p>{text('Vérification de la session…','كنتأكدو من الحساب…')}</p> : recovery && user ? <form onSubmit={changePassword} className="space-y-4">
+          <h2 className="font-bold">{text('Choisir un nouveau mot de passe','اختار كلمة سر جديدة')}</h2>
+          <label className="block">{text('Nouveau mot de passe','كلمة السر الجديدة')}<input type="password" minLength={12} required autoComplete="new-password" value={password} onChange={event => setPassword(event.target.value)} className="block w-full border rounded-xl p-3 mt-1" /></label>
+          <label className="block">{text('Confirmer le mot de passe','أكد كلمة السر')}<input type="password" minLength={12} required autoComplete="new-password" value={passwordConfirmation} onChange={event => setPasswordConfirmation(event.target.value)} className="block w-full border rounded-xl p-3 mt-1" /></label>
+          <button disabled={busy} className="bg-orange-600 text-white rounded-xl p-3 font-bold">{text('Enregistrer le nouveau mot de passe','سجل كلمة السر الجديدة')}</button>
+        </form> : !user ? <>
           <p className="text-sm text-slate-600">{text('Un même accès pour les clients et le personnel. Les clients cumulent des points de fidélité ; le personnel retrouve ses espaces autorisés.', 'نفس المدخل للزبناء وللعاملين. الزبون كيجمع نقاط الوفاء والعامل كيلقى غير الصفحات المسموح ليه بها.')}</p>
           <div className="flex gap-2">
             {[false, true].map(value => <button key={String(value)} onClick={() => { setSignup(value); setMessage(''); }} className={`flex-1 p-3 rounded-xl font-bold text-sm ${signup===value ? 'bg-orange-600 text-white' : 'bg-slate-100'}`}>{value ? text('Créer mon compte','نفتح حساب') : text('Se connecter','ندخل للحساب')}</button>)}
@@ -110,6 +142,7 @@ export default function AccountPage() {
             {signup && <p className="text-xs text-slate-500">{text('12 caractères minimum. Confirmez ensuite votre adresse par e-mail.', '12 حرف على الأقل. من بعد أكد البريد الإلكتروني ديالك.')}</p>}
             <button disabled={busy} className="w-full bg-orange-600 text-white font-bold p-3 rounded-xl disabled:opacity-50">{busy ? text('Patientez…','تسنى شوية…') : signup ? text('Créer mon compte client','نفتح حساب زبون') : text('Se connecter','ندخل للحساب')}</button>
           </form>
+          <button type="button" disabled={busy} onClick={forgotPassword} className="block text-sm text-orange-700 underline">{text('Mot de passe oublié ?','نسيتي كلمة السر؟')}</button>
           <button disabled={busy || !email.trim()} onClick={resend} className="text-sm text-orange-700 underline disabled:opacity-50">{text('Renvoyer le lien de confirmation','عاود صيفط رابط التأكيد')}</button>
         </> : <>
           <div className="flex flex-wrap items-center justify-between gap-3"><p className="text-sm break-all">{user.email}</p><button onClick={async()=>{setBusy(true); try { const {error}=await supabase.auth.signOut(); if(error) setMessage(text('Déconnexion impossible. Réessayez.','ما قدرناش نخرجو الحساب. عاود المحاولة.')); } finally {setBusy(false);} }} disabled={busy} className="flex gap-2 items-center text-sm font-bold text-slate-600"><LogOut size={16}/>{text('Se déconnecter','نخرج')}</button></div>

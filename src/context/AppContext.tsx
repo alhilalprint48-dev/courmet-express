@@ -13,8 +13,9 @@ import {
   CustomerDetails 
 } from '@/types';
 import { translations } from '@/lib/translations';
-import { RESTAURANT_INFO, PRODUCTS as FALLBACK_PRODUCTS, CATEGORIES as FALLBACK_CATEGORIES } from '@/data/mockData';
+import { RESTAURANT_INFO } from '@/data/mockData';
 import { supabase, supabaseUrl, supabaseAnonKey } from '@/lib/supabase';
+import { fetchRestaurantData } from '@/lib/restaurant-data.mjs';
 import { normalizePhone } from '@/lib/phone';
 
 export interface RestaurantData {
@@ -58,6 +59,8 @@ interface AppContextType {
   deleteCategory: (categoryId: string) => Promise<void>;
   products: Product[];
   isLoadingProducts: boolean;
+  restaurantError: string;
+  reloadRestaurant: () => void;
   toggleProductAvailability: (productId: string) => Promise<void>;
   addProduct: (product: Omit<Product, 'id'>) => Promise<Product>;
   deleteProduct: (productId: string) => Promise<void>;
@@ -109,7 +112,7 @@ interface AppContextType {
 }
 
 const DEFAULT_RESTAURANT: RestaurantData = {
-  id: 'ded21d9f-ff8f-481b-b37e-b91f89c1ab10',
+  id: '',
   slug: 'gourmet-express',
   name: RESTAURANT_INFO.name,
   tagline: 'Cuisine artisanale & Livraison rapide',
@@ -120,8 +123,8 @@ const DEFAULT_RESTAURANT: RestaurantData = {
   delivery_fee: RESTAURANT_INFO.deliveryFee,
   min_delivery_amount: RESTAURANT_INFO.minDeliveryAmount,
   max_cash_amount: 500,
-  is_active: true,
-  is_open: true,
+  is_active: false,
+  is_open: false,
   open_hours: '',
   closed_message: '',
 };
@@ -133,9 +136,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [restaurant, setRestaurant] = useState<RestaurantData>(DEFAULT_RESTAURANT);
   const restaurantMutationVersion = useRef(0);
   const [availableRestaurants, setAvailableRestaurants] = useState<{ id: string; slug: string; name: string }[]>([]);
-  const [products, setProducts] = useState<Product[]>(FALLBACK_PRODUCTS);
-  const [categories, setCategories] = useState<Category[]>(FALLBACK_CATEGORIES);
-  const [isLoadingProducts, setIsLoadingProducts] = useState(false);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [isLoadingProducts, setIsLoadingProducts] = useState(true);
+  const [restaurantError, setRestaurantError] = useState('');
+  const restaurantLoadGeneration = useRef(0);
+  const requestedSlug = useRef('gourmet-express');
 
   const [mode, setMode] = useState<ConsumptionMode>('delivery');
   const [tableNumber, setTableNumber] = useState<string>('Table 1');
@@ -152,6 +158,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const [blacklist, setBlacklist] = useState<string[]>([]);
   const refreshBlacklist = useCallback(async () => {
+    if (!restaurant.id) { setBlacklist([]); return; }
     const { data, error } = await supabase.from('blacklist').select('phone').eq('restaurant_id', restaurant.id);
     setBlacklist(error ? [] : (data || []).map(row => row.phone));
   }, [restaurant.id]);
@@ -190,98 +197,31 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   // Load active restaurant from URL ?r=slug or default
-  const loadRestaurant = async (slugToLoad?: string) => {
+  const loadRestaurant = async (slugToLoad = 'gourmet-express') => {
+    const generation = ++restaurantLoadGeneration.current;
+    requestedSlug.current = slugToLoad;
+    setIsLoadingProducts(true); setRestaurantError(''); setProducts([]); setCategories([]);
+    setRestaurant(DEFAULT_RESTAURANT); setIsCheckoutOpen(false); setSelectedProductForModal(null);
     try {
-      // 1. Fetch available restaurants for switcher
-      const { data: allRestos } = await supabase
-        .from('restaurants')
-        .select('id, slug, name')
-        .order('name');
-
-      if (allRestos && allRestos.length > 0) {
-        setAvailableRestaurants(allRestos);
-      }
-
-      // 2. Fetch specific restaurant data
-      const targetSlug = slugToLoad || 'gourmet-express';
-      const { data: restoData, error } = await supabase
-        .from('restaurants')
-        .select('*')
-        .eq('slug', targetSlug)
-        .single();
-
-      if (error || !restoData) {
-        console.warn("Using fallback restaurant info:", error?.message);
-        return;
-      }
-
-      setRestaurant({
-        id: restoData.id,
-        slug: restoData.slug,
-        name: restoData.name,
-        tagline: restoData.tagline || 'Cuisine & Livraison',
-        phone: restoData.phone || RESTAURANT_INFO.phone,
-        whatsapp_number: restoData.whatsapp_number || RESTAURANT_INFO.whatsappNumber,
-        address: restoData.address || RESTAURANT_INFO.address,
-        currency: restoData.currency || 'DH',
-        delivery_fee: Number(restoData.delivery_fee ?? 15),
-        min_delivery_amount: Number(restoData.min_delivery_amount ?? 50),
-        max_cash_amount: Number(restoData.max_cash_amount ?? 500),
-        is_active: restoData.is_active,
-        is_open: restoData.is_open ?? true,
-        open_hours: restoData.open_hours || '',
-        closed_message: restoData.closed_message || '',
-      });
-
-      // 3. Fetch categories of this restaurant
-      const { data: catsData } = await supabase
-        .from('categories')
-        .select('*')
-        .eq('restaurant_id', restoData.id)
-        .order('sort_order', { ascending: true });
-
-      if (catsData && catsData.length > 0) {
-        const formattedCats: Category[] = catsData.map((c) => ({
-          id: c.id,
-          name: { fr: c.name_fr, ar: c.name_ar || c.name_fr },
-          iconName: c.icon_name || 'UtensilsCrossed',
-        }));
-        setCategories(formattedCats);
-      } else {
-        setCategories(FALLBACK_CATEGORIES);
-      }
-
-      // 4. Fetch products of this restaurant
-      setIsLoadingProducts(true);
-      const { data: prodsData } = await supabase
-        .from('products')
-        .select('*')
-        .eq('restaurant_id', restoData.id);
-
-      if (prodsData && prodsData.length > 0) {
-        const formatted: Product[] = prodsData.map(p => {
-          const optionGroups = p.option_groups || [];
-
-          return {
-            id: p.id,
-            categoryId: p.category_id || 'burgers',
-            name: { fr: p.name_fr, ar: p.name_ar || p.name_fr },
-            description: { fr: p.description_fr || '', ar: p.description_ar || '' },
-            price: Number(p.price),
-            image: p.image || 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?auto=format&fit=crop&w=800&q=80',
-            allergens: p.allergens || [],
-            isAvailable: p.is_available,
-            optionGroups: optionGroups || [],
-          };
-        });
-        setProducts(formatted);
-      }
-      setIsLoadingProducts(false);
-    } catch (e) {
-      console.error("Error loading restaurant data from Supabase:", e);
-      setIsLoadingProducts(false);
-    }
+      const data = await fetchRestaurantData(supabase, slugToLoad);
+      if (generation !== restaurantLoadGeneration.current) return;
+      const row = data.restaurant;
+      setAvailableRestaurants(data.available);
+      setRestaurant({ id: row.id, slug: row.slug, name: row.name, tagline: row.tagline || '', phone: row.phone || '',
+        whatsapp_number: row.whatsapp_number || '', address: row.address || '', currency: row.currency || 'DH',
+        delivery_fee: Number(row.delivery_fee ?? 0), min_delivery_amount: Number(row.min_delivery_amount ?? 0),
+        max_cash_amount: Number(row.max_cash_amount ?? 500), is_active: row.is_active, is_open: row.is_open,
+        open_hours: row.open_hours || '', closed_message: row.closed_message || '' });
+      setCategories(data.categories.map((category: any) => ({ id: category.id, name: { fr: category.name_fr, ar: category.name_ar || category.name_fr }, iconName: category.icon_name || 'UtensilsCrossed' })));
+      setProducts(data.products.map((product: any) => ({ id: product.id, categoryId: product.category_id || '',
+        name: { fr: product.name_fr, ar: product.name_ar || product.name_fr }, description: { fr: product.description_fr || '', ar: product.description_ar || '' },
+        price: Number(product.price), image: product.image || '/placeholder-product.svg', allergens: product.allergens || [], isAvailable: product.is_available, optionGroups: product.option_groups || [] })));
+      try { localStorage.setItem('resto_preferred_slug', row.slug); } catch {}
+    } catch (failure) {
+      if (generation === restaurantLoadGeneration.current) setRestaurantError(failure instanceof Error ? failure.message : 'Chargement impossible.');
+    } finally { if (generation === restaurantLoadGeneration.current) setIsLoadingProducts(false); }
   };
+  const reloadRestaurant = () => { void loadRestaurant(requestedSlug.current); };
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -305,7 +245,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         }
       } catch (e) {}
 
-      loadRestaurant(slug || undefined);
+      let preferred: string | undefined;
+      try { if (window.location.pathname === '/compte') preferred = localStorage.getItem('resto_preferred_slug') || undefined; } catch {}
+      void loadRestaurant(slug || preferred || undefined);
     }
   }, []);
 
@@ -327,13 +269,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       url.searchParams.set('r', slug);
       window.history.pushState({}, '', url.toString());
     }
-    clearCart();
-    loadRestaurant(slug);
+    clearCart(); setCurrentOrder(null);
+    void loadRestaurant(slug);
   };
 
   // Refresh public restaurant state on existing tabs, even without Realtime setup.
   useEffect(() => {
     let active = true;
+    if (!restaurant.id) return;
     const refresh = async () => {
       if (document.hidden) return;
       const revision = restaurantMutationVersion.current;
@@ -566,6 +509,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         deleteCategory,
         products,
         isLoadingProducts,
+        restaurantError,
+        reloadRestaurant,
         toggleProductAvailability,
         addProduct,
         deleteProduct,

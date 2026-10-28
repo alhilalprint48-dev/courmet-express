@@ -23,6 +23,7 @@ export const LiveOrderTracker: React.FC = () => {
   const { liveTrackingOrder, setLiveTrackingOrder, language, t } = useApp();
   const [isExpanded, setIsExpanded] = useState<boolean>(true);
   const [status, setStatus] = useState<OrderStatus>(liveTrackingOrder?.status || 'new');
+  const [connectionError, setConnectionError] = useState('');
   const [lastNotification, setLastNotification] = useState<string | null>(null);
 
   // Sync state if liveTrackingOrder changes
@@ -34,14 +35,18 @@ export const LiveOrderTracker: React.FC = () => {
 
   // Real-time polling / Supabase sync to listen for status changes from KDS
   useEffect(() => {
-    if (!liveTrackingOrder) return;
+    if (!liveTrackingOrder || ['delivered','cancelled'].includes(liveTrackingOrder.status)) return;
 
+    let active = true;
     const checkOrderStatus = async () => {
       try {
         if (!liveTrackingOrder.trackingToken) return;
-        const { data: state } = await supabase.rpc('guest_order_status', {
+        const { data: state, error } = await supabase.rpc('guest_order_status', {
           order_id: liveTrackingOrder.id, token: liveTrackingOrder.trackingToken,
         });
+        if (!active) return;
+        if (error) throw error;
+        setConnectionError('');
         const data = state ? { status: state } : null;
 
         if (data && data.status && data.status !== status) {
@@ -73,13 +78,15 @@ export const LiveOrderTracker: React.FC = () => {
           }
         }
       } catch (err) {
-        // Silent catch
+        if (!active) return;
+        setConnectionError(language === 'ar' ? 'التتبع ما تحدّثش. تأكد من الاتصال.' : 'Suivi non actualisé. Vérifiez votre connexion.');
       }
     };
 
-    const interval = setInterval(checkOrderStatus, 4000);
-    return () => clearInterval(interval);
-  }, [liveTrackingOrder, status, setLiveTrackingOrder]);
+    void checkOrderStatus();
+    const interval = setInterval(() => { if (!document.hidden) void checkOrderStatus(); }, 10000);
+    return () => { active = false; clearInterval(interval); };
+  }, [liveTrackingOrder, status, setLiveTrackingOrder, language]);
 
   if (!liveTrackingOrder) return null;
 
@@ -112,6 +119,7 @@ export const LiveOrderTracker: React.FC = () => {
       aria-label={language === 'ar' ? 'تتبع الطلب المباشر' : 'Suivi de commande en direct'}
       className="fixed bottom-3 left-1/2 -translate-x-1/2 z-40 w-[94%] max-w-md animate-slide-up"
     >
+      {connectionError && <p role="alert" className="bg-amber-100 text-amber-950 rounded-xl p-3 text-xs">{connectionError}</p>}
       <div className="bg-white rounded-3xl shadow-2xl border-2 border-primary-500 overflow-hidden ring-4 ring-primary-500/10">
         {/* Tracker Header */}
         <div 

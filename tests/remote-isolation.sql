@@ -33,18 +33,20 @@ BEGIN
  IF EXISTS(SELECT 1 FROM public.orders WHERE id=(ob->>'id')::uuid) THEN RAISE EXCEPTION 'A voit la commande de B'; END IF;
  IF EXISTS(SELECT 1 FROM public.order_items WHERE order_id=(ob->>'id')::uuid) THEN RAISE EXCEPTION 'A voit les lignes de B'; END IF;
  IF EXISTS(SELECT 1 FROM public.blacklist WHERE restaurant_id=b) THEN RAISE EXCEPTION 'A voit la liste noire de B'; END IF;
- UPDATE public.orders SET status='delivered' WHERE id=(ob->>'id')::uuid;
- GET DIAGNOSTICS affected=ROW_COUNT;
- IF affected<>0 THEN RAISE EXCEPTION 'A modifie B'; END IF;
- DELETE FROM public.orders WHERE id=(ob->>'id')::uuid;
- GET DIAGNOSTICS affected=ROW_COUNT;
- IF affected<>0 THEN RAISE EXCEPTION 'A supprime B'; END IF;
+ BEGIN
+  PERFORM public.order_action(a,(ob->>'id')::uuid,'cancel','TEST FOREIGN');
+  RAISE EXCEPTION 'A modifie B';
+ EXCEPTION WHEN insufficient_privilege THEN NULL; END;
+ BEGIN
+  DELETE FROM public.orders WHERE id=(ob->>'id')::uuid;
+  RAISE EXCEPTION 'Suppression directe autorisée';
+ EXCEPTION WHEN insufficient_privilege THEN NULL; END;
  UPDATE public.products SET price=1 WHERE id=pb;
  GET DIAGNOSTICS affected=ROW_COUNT;
  IF affected<>0 THEN RAISE EXCEPTION 'A modifie les prix de B'; END IF;
- UPDATE public.orders SET status='preparing' WHERE id=(oa->>'id')::uuid;
- UPDATE public.orders SET status='ready' WHERE id=(oa->>'id')::uuid;
- UPDATE public.orders SET status='delivered' WHERE id=(oa->>'id')::uuid;
+ PERFORM public.order_action(a,(oa->>'id')::uuid,'prepare');
+ PERFORM public.order_action(a,(oa->>'id')::uuid,'ready');
+ PERFORM public.order_action(a,(oa->>'id')::uuid,'complete','payment_confirmed');
  IF public.guest_order_status((oa->>'id')::uuid,oa->>'tracking_token') IS DISTINCT FROM 'delivered' THEN RAISE EXCEPTION 'Suivi incorrect'; END IF;
  IF (public.customer_loyalty(a)->>'points')::int<>8 THEN RAISE EXCEPTION 'Fidélité incorrecte'; END IF;
  settings:=public.update_restaurant_settings(a,0,0,'212600000098');
@@ -84,9 +86,10 @@ BEGIN
  EXECUTE 'SET LOCAL ROLE authenticated';
  IF EXISTS(SELECT 1 FROM public.orders WHERE id=(oa->>'id')::uuid) THEN RAISE EXCEPTION 'B voit A'; END IF;
  IF (SELECT count(*) FROM public.orders WHERE id=(ob->>'id')::uuid)<>1 THEN RAISE EXCEPTION 'B ne voit pas sa commande'; END IF;
- UPDATE public.orders SET status='cancelled' WHERE id=(oa->>'id')::uuid;
- GET DIAGNOSTICS affected=ROW_COUNT;
- IF affected<>0 THEN RAISE EXCEPTION 'B modifie A'; END IF;
+ BEGIN
+  PERFORM public.order_action(b,(oa->>'id')::uuid,'cancel','TEST FOREIGN');
+  RAISE EXCEPTION 'B modifie A';
+ EXCEPTION WHEN insufficient_privilege THEN NULL; END;
  IF (public.customer_loyalty(a)->>'points')::int<>0 THEN RAISE EXCEPTION 'B voit la fidélité de A'; END IF;
  EXECUTE 'RESET ROLE';
 END $$;

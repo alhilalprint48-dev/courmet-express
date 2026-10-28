@@ -17,108 +17,25 @@ import {
   DollarSign
 } from 'lucide-react';
 import { Order } from '@/types';
+import { useApp } from '@/context/AppContext';
+import { useStaffOrders } from '@/hooks/useStaffOrders';
+import { ServiceConnection } from '@/components/ServiceConnection';
+import { navigationUrl } from '@/lib/order-utils.mjs';
 import { supabase } from '@/lib/supabase';
 import { StaffAuthGate } from '@/components/StaffAuthGate';
 
 function DeliveryPage() {
-  const [deliveries, setDeliveries] = useState<Order[]>([]);
+  const { restaurant } = useApp();
+  const queue = useStaffOrders(restaurant.id, true);
+  const deliveries = queue.orders;
   const [collectedAmounts, setCollectedAmounts] = useState<{ [key: string]: boolean }>({});
-
-  const fetchDeliveries = async () => {
-    try {
-      // 1. Fetch live delivery orders from Supabase
-      const { data: supaOrders } = await supabase
-        .from('orders')
-        .select(`*, order_items (*)`)
-        .eq('mode', 'delivery')
-        .in('status', ['new', 'preparing', 'ready', 'delivering'])
-        .order('created_at', { ascending: false });
-
-      if (supaOrders && supaOrders.length > 0) {
-        const formatted: Order[] = supaOrders.map((o) => {
-          const createdAtDate = new Date(o.created_at);
-          const timeStr = createdAtDate.toLocaleTimeString('fr-FR', {
-            hour: '2-digit',
-            minute: '2-digit',
-          });
-
-          const items = (o.order_items || []).map((oi: any) => ({
-            cartItemId: oi.id,
-            product: {
-              id: oi.product_id || oi.id,
-              categoryId: '',
-              name: { fr: oi.product_name_fr, ar: oi.product_name_fr },
-              description: { fr: '', ar: '' },
-              price: Number(oi.unit_price) || 0,
-              image: '',
-              allergens: [],
-              isAvailable: true,
-            },
-            selectedOptions: [],
-            quantity: Number(oi.quantity) || 1,
-            unitPrice: Number(oi.unit_price) || 0,
-            totalPrice: Number(oi.total_price) || 0,
-            specialInstructions: oi.special_instructions,
-          }));
-
-          return {
-            id: o.id,
-            orderNumber: o.order_number,
-            createdAt: timeStr,
-            status: o.status,
-            mode: 'delivery',
-            items: items.length > 0 ? items : [
-              {
-                cartItemId: o.id + '_item',
-                product: {
-                  id: 'p1',
-                  categoryId: '',
-                  name: { fr: 'Commande Livraison', ar: '' },
-                  description: { fr: '', ar: '' },
-                  price: Number(o.subtotal) || 0,
-                  image: '',
-                  allergens: [],
-                  isAvailable: true,
-                },
-                selectedOptions: [],
-                quantity: 1,
-                unitPrice: Number(o.subtotal) || 0,
-                totalPrice: Number(o.subtotal) || 0,
-              }
-            ],
-            discountAmount: Number(o.discount_amount || 0), pointsRedeemed: Number(o.points_redeemed || 0),
-            subtotal: Number(o.subtotal) || 0,
-            deliveryFee: Number(o.delivery_fee ?? 0),
-            total: Number(o.total) || 0,
-            customer: {
-              fullName: o.customer_name || 'Client',
-              phone: o.customer_phone || '-',
-              address: o.customer_address || '',
-              landmark: o.customer_landmark,
-              specialInstructions: o.special_instructions,
-              deliveryTimeSlot: o.delivery_timeslot,
-              paymentMethod: o.payment_method || 'cash',
-              cashChangeAmount: o.cash_change_amount,
-              gpsCoords: o.gps_lat ? { lat: Number(o.gps_lat), lng: Number(o.gps_lng) } : undefined,
-            },
-          };
-        });
-
-        setDeliveries(formatted);
-        return;
-      }
-
-      setDeliveries([]);
-    } catch (e) {
-      console.warn("Failed to fetch deliveries:", e);
-    }
+  const [actionError, setActionError] = useState('');
+  const perform = async (id: string, action: string, note: string | null = null) => {
+    setActionError('');
+    const { error } = await supabase.rpc('order_action', { tenant: restaurant.id, target: id, action, note });
+    if (error) setActionError(error.message || 'Action refusée.');
+    queue.refresh();
   };
-
-  React.useEffect(() => {
-    fetchDeliveries();
-    const interval = setInterval(fetchDeliveries, 3000);
-    return () => clearInterval(interval);
-  }, []);
 
   const handleToggleCollected = (orderId: string) => {
     setCollectedAmounts((prev) => ({
@@ -127,30 +44,10 @@ function DeliveryPage() {
     }));
   };
 
-  const handleFinishDelivery = async (orderId: string) => {
-    const { data, error } = await supabase.from('orders').update({ status: 'delivered' }).eq('id', orderId).select('id');
-    if (error || !data?.length) alert('Clôture refusée. Vérifiez vos droits et le statut.');
-    await fetchDeliveries();
-  };
-
-  const openGpsNavigation = (order: Order) => {
-    if (order.customer.gpsCoords) {
-      window.open(
-        `https://www.google.com/maps/dir/?api=1&destination=${order.customer.gpsCoords.lat},${order.customer.gpsCoords.lng}`,
-        '_blank'
-      );
-    } else {
-      window.open(
-        `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-          order.customer.address + ', Casablanca'
-        )}`,
-        '_blank'
-      );
-    }
-  };
-
-  const activeDeliveries = deliveries.filter((d) => d.status !== 'delivered');
-  const finishedDeliveries = deliveries.filter((d) => d.status === 'delivered');
+  const handleFinishDelivery = async (id: string) => { await perform(id, 'complete', 'payment_confirmed'); };
+  const openGpsNavigation = (order: Order) => { window.open(navigationUrl(order.customer), '_blank', 'noopener,noreferrer'); };
+  const activeDeliveries = deliveries.filter(order => !['delivered','cancelled'].includes(order.status));
+  const finishedDeliveries = deliveries.filter(order => ['delivered','cancelled'].includes(order.status));
 
   return (
     <>
@@ -169,8 +66,8 @@ function DeliveryPage() {
               <Bike className="w-5 h-5" />
             </div>
             <div>
-              <h1 className="font-black text-base leading-tight">Module Coursier</h1>
-              <span className="text-[11px] text-emerald-400 font-bold">Livreur #04 (En service)</span>
+              <h1 className="font-black text-base leading-tight">{restaurant.name} — Livraisons</h1>
+              <span className="text-[11px] text-emerald-400 font-bold">Compte {queue.userId.slice(0, 8)}</span>
             </div>
           </div>
 
@@ -180,15 +77,17 @@ function DeliveryPage() {
         </div>
       </div>
 
+      <ServiceConnection loading={queue.loading} error={queue.error} lastSuccess={queue.lastSuccess} refresh={queue.refresh} />
+      {actionError && <p role="alert" className="p-3 bg-red-950 text-red-200">{actionError}</p>}
       {/* Main Content */}
       <div className="p-4 space-y-4 flex-1">
-        {activeDeliveries.length === 0 ? (
+        {queue.loading && deliveries.length === 0 ? <p role="status">Chargement…</p> : queue.error && deliveries.length === 0 ? <p>Courses indisponibles. Réessayez avant de conclure que la file est vide.</p> : activeDeliveries.length === 0 ? (
           <div className="text-center py-16 bg-slate-800/60 rounded-3xl border border-slate-700 p-6 space-y-3">
             <div className="w-14 h-14 bg-emerald-500/20 text-emerald-400 rounded-full flex items-center justify-center mx-auto">
               <CheckCircle className="w-8 h-8" />
             </div>
-            <h3 className="font-extrabold text-base text-white">Toutes les livraisons sont terminées !</h3>
-            <p className="text-xs text-slate-400">En attente de nouvelles commandes de la cuisine...</p>
+            <h3 className="font-extrabold text-base text-white">Aucune course active affichée</h3>
+            <p className="text-xs text-slate-400">Les courses prêtes apparaissent ici. Consultez l’état de connexion ci-dessus.</p>
           </div>
         ) : (
           activeDeliveries.map((order) => {
@@ -217,6 +116,8 @@ function DeliveryPage() {
                   </div>
                 </div>
 
+                {!order.assignedDriverId && <button type="button" onClick={() => perform(order.id, 'claim')} className="m-3 p-3 bg-purple-600 text-white rounded-xl font-bold">Prendre cette course</button>}
+                {order.assignedDriverId === queue.userId && <p className="px-4 text-xs text-emerald-300">Course attribuée à votre compte</p>}
                 {/* Customer & Address Details */}
                 <div className="p-4 space-y-3 text-xs">
                   {/* Name & Phone */}
@@ -309,7 +210,7 @@ function DeliveryPage() {
                 {/* Final Button */}
                 <div className="p-3 bg-slate-800/80 border-t border-slate-700">
                   <button
-                    disabled={!isPaid}
+                    disabled={!isPaid || order.assignedDriverId !== queue.userId}
                     onClick={() => handleFinishDelivery(order.id)}
                     className={`w-full py-3.5 rounded-2xl font-black text-xs flex items-center justify-center gap-2 transition-all ${
                       isPaid
@@ -330,7 +231,7 @@ function DeliveryPage() {
         {finishedDeliveries.length > 0 && (
           <div className="pt-4 space-y-2">
             <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider px-1">
-              Livraisons terminées ({finishedDeliveries.length})
+              Historique récent ({finishedDeliveries.length} / 50 maximum)
             </h3>
             <div className="space-y-2">
               {finishedDeliveries.map((d) => (
@@ -341,8 +242,8 @@ function DeliveryPage() {
                   <div className="flex items-center gap-2">
                     <CheckCircle className="w-4 h-4 text-emerald-400" />
                     <div>
-                      <span className="font-bold text-white block">{d.orderNumber} - {d.customer.fullName}</span>
-                      <span className="text-[10px] text-slate-400">{d.customer.address}</span>
+                      <span className="font-bold text-white block">{d.orderNumber} · {d.status === 'cancelled' ? 'Annulée' : 'Livrée'} - {d.customer.fullName}</span>
+                      <span className="text-[10px] text-slate-400">{d.customer.address}{d.paidAt ? ` · Paiement enregistré : ${d.paymentReceived} DH` : ' · Paiement non tracé'}</span>
                     </div>
                   </div>
                   <span className="font-black text-emerald-400">{d.total} DH</span>

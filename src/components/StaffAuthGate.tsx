@@ -9,11 +9,12 @@ export type StaffRole = 'kds' | 'livreur' | 'admin' | 'superadmin';
 interface Props { role: StaffRole; title: string; subtitle: string; children: React.ReactNode }
 
 export function StaffAuthGate({ role, title, children }: Props) {
-  const { restaurant } = useApp();
+  const { restaurant, isLoadingProducts, restaurantError, reloadRestaurant } = useApp();
   const [allowed, setAllowed] = useState(false);
   const [checking, setChecking] = useState(true);
 
   useEffect(() => {
+    if (!restaurant.id || isLoadingProducts || restaurantError) { setAllowed(false); setChecking(true); return; }
     let active = true;
     let generation = 0;
     const check = async () => {
@@ -35,12 +36,13 @@ export function StaffAuthGate({ role, title, children }: Props) {
     });
     const timer = setInterval(() => { void check(); }, 60000);
     return () => { active = false; subscription.unsubscribe(); clearInterval(timer); };
-  }, [role, restaurant.id]);
+  }, [role, restaurant.id, isLoadingProducts, restaurantError]);
 
-  if (checking) return <div className="min-h-screen grid place-items-center">Vérification de la session…</div>;
+  if (restaurantError) return <main className="p-6"><p role="alert">{restaurantError}</p><button onClick={reloadRestaurant}>Réessayer</button><Link href="/">Menu principal</Link></main>;
+  if (checking || isLoadingProducts) return <div className="min-h-screen grid place-items-center">Vérification de la session…</div>;
   if (allowed) return <>
     <div className="fixed top-2 right-2 z-50 print:hidden flex gap-2">
-      <Link href="/compte" className="rounded-xl px-4 py-2 bg-white text-slate-900 border">Mon compte</Link>
+      <Link href={`/compte?r=${encodeURIComponent(restaurant.slug)}`} className="rounded-xl px-4 py-2 bg-white text-slate-900 border">Mon compte</Link>
       <button className="rounded-xl px-4 py-2 bg-slate-900 text-white" onClick={async () => {
         setAllowed(false); await supabase.auth.signOut();
       }}>Se déconnecter</button>
@@ -52,7 +54,7 @@ export function StaffAuthGate({ role, title, children }: Props) {
       <Link href="/">Retour au menu</Link>
       <h1 className="text-2xl font-bold">{title}</h1>
       <p>Connectez-vous depuis Mon compte. Cet espace est réservé au personnel autorisé.</p>
-      <Link href="/compte" className="block text-center w-full p-3 bg-orange-600 rounded-xl font-bold">Mon compte</Link>
+      <Link href={`/compte?r=${encodeURIComponent(restaurant.slug)}`} className="block text-center w-full p-3 bg-orange-600 rounded-xl font-bold">Mon compte</Link>
     </div>
   </main>;
 }

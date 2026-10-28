@@ -103,6 +103,11 @@ export type OrderStatus =
   | 'cancelled';
 
 export interface Order {
+  assignedDriverId?: string;
+  paidAt?: string;
+  paidBy?: string;
+  paymentReceived?: number;
+  archivedAt?: string;
   trackingToken?: string;
   id: string;
   orderNumber: string;
