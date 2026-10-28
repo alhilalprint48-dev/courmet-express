@@ -105,7 +105,7 @@ interface AppContextType {
   setCurrentOrder: (order: Order | null) => void;
   liveTrackingOrder: Order | null;
   setLiveTrackingOrder: (order: Order | null) => void;
-  placeOrder: (customer: CustomerDetails, captchaToken: string) => Promise<Order>;
+  placeOrder: (customer: CustomerDetails, captchaToken: string, redeemPoints?: boolean) => Promise<Order>;
 }
 
 const DEFAULT_RESTAURANT: RestaurantData = {
@@ -431,9 +431,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setSelectedProductForModal(null);
   };
 
-  const placeOrder = async (customer: CustomerDetails, captchaToken: string): Promise<Order> => {
+  const placeOrder = async (customer: CustomerDetails, captchaToken: string, redeemPoints = false): Promise<Order> => {
     const payload = {
-      restaurantId: restaurant.id, mode, tableNumber: mode === 'dine_in' ? tableNumber : null,
+      restaurantId: restaurant.id, redeemPoints, mode, tableNumber: mode === 'dine_in' ? tableNumber : null,
       customer: { ...customer, phone: mode === 'dine_in' ? '' : normalizePhone(customer.phone) },
       items: cart.map(item => ({ productId: item.product.id, quantity: item.quantity,
         options: item.selectedOptions.map(opt => ({ groupId: opt.groupId, optionId: opt.optionId })),
@@ -450,6 +450,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const newOrder: Order = {
       id: data.id, trackingToken: data.tracking_token, orderNumber: data.order_number, createdAt: data.created_at, status: data.status,
       mode: data.mode, tableNumber: data.table_number || undefined,
+      discountAmount: Number(data.discount_amount || 0), pointsRedeemed: Number(data.points_redeemed || 0),
       subtotal: Number(data.subtotal), deliveryFee: Number(data.delivery_fee), total: Number(data.total),
       customer: { ...customer, phone: data.customer_phone },
       items: data.items.map((line: any, index: number) => ({

@@ -52,7 +52,7 @@ export function RestaurantAnalytics({ restaurantId, currency }: { restaurantId: 
       <div className="bg-white p-5 rounded-2xl border overflow-x-auto">
         <h4 className="font-bold mb-3">Produits les plus vendus ce mois</h4>
         {data.top_products.length === 0 ? <p className="text-sm text-slate-500">Aucun produit vendu dans les commandes clôturées ce mois.</p> : <table className="w-full text-sm text-left">
-          <thead><tr><th scope="col" className="py-2">Produit</th><th scope="col">Quantité</th><th scope="col">Montant produits</th></tr></thead>
+          <thead><tr><th scope="col" className="py-2">Produit</th><th scope="col">Quantité</th><th scope="col">Montant avant remises</th></tr></thead>
           <tbody>{data.top_products.map(product => <tr key={`${product.product_id}:${product.name}`} className="border-t"><td className="py-2">{product.name}</td><td>{product.quantity}</td><td>{money(product.revenue)}</td></tr>)}</tbody>
         </table>}
       </div>

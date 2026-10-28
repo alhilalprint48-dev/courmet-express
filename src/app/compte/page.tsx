@@ -8,7 +8,7 @@ import { supabase } from '@/lib/supabase';
 import { useApp } from '@/context/AppContext';
 import type { StaffRole } from '@/components/StaffAuthGate';
 
-type History = { id: string; order_number: string; status: string; total: number; created_at: string };
+type History = { id: string; order_number: string; status: string; total: number; discount_amount: number; points_redeemed: number; created_at: string };
 export default function AccountPage() {
   const { language, setLanguage, restaurant } = useApp();
   const ar = language === 'ar';
@@ -37,7 +37,7 @@ export default function AccountPage() {
         const [access, loyalty, orders] = await Promise.all([
           supabase.rpc('current_staff_role', { tenant: restaurant.id }),
           supabase.rpc('customer_loyalty', { tenant: restaurant.id }),
-          supabase.from('orders').select('id,order_number,status,total,created_at')
+          supabase.from('orders').select('id,order_number,status,total,discount_amount,points_redeemed,created_at')
             .eq('customer_user_id', signedIn.id).eq('restaurant_id', restaurant.id)
             .order('created_at', { ascending: false }).limit(20),
         ]);
@@ -94,7 +94,7 @@ export default function AccountPage() {
   return <main dir={ar ? 'rtl' : 'ltr'} className="min-h-screen bg-slate-50 px-4 py-6 sm:py-10">
     <div className="max-w-2xl mx-auto space-y-5">
       <div className="flex items-center justify-between gap-3">
-        <Link href="/" className="flex items-center gap-2 text-sm font-bold text-orange-700"><ArrowLeft size={17} />{text('Retour au menu','رجع للقائمة')}</Link>
+        <Link href={`/?r=${encodeURIComponent(restaurant.slug)}`} className="flex items-center gap-2 text-sm font-bold text-orange-700"><ArrowLeft size={17} />{text('Retour au menu','رجع للقائمة')}</Link>
         <button className="text-sm px-3 py-2 rounded-xl bg-white border" onClick={() => setLanguage(ar ? 'fr' : 'ar')}>{ar ? 'Français' : 'عربي'}</button>
       </div>
       <section className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-8 shadow-sm space-y-5">
@@ -126,11 +126,11 @@ export default function AccountPage() {
             <h2 className="flex items-center gap-2 text-orange-800 font-bold"><Gift size={21}/>{text('Mes points de fidélité','نقاط الوفاء ديالي')}</h2>
             <p className="text-4xl font-black text-orange-700">{points===null ? '—' : points} <span className="text-base">{text('points','نقطة')}</span></p>
             {points===null && <p className="text-sm">{text('Solde indisponible. Actualisez pour réessayer.','الرصيد ما بانش دابا. عاود حدّث الصفحة.')}</p>}
-            <p className="text-sm text-slate-600">{text('1 point pour 10 DH de produits, hors livraison, à la fin de la commande. Connectez-vous avant de commander. Les commandes invitées ne rapportent pas de points.', 'نقطة لكل 10 دراهم ديال الماكلة، بلا مصاريف التوصيل، ملي كيتسالا الطلب. دخل للحساب قبل ما تطلب. الطلبات بلا حساب ما كتجمعش النقط.')}</p>
-            <p className="text-xs text-slate-500">{text('Les points sont cumulés ; aucune remise automatique n’est encore activée.','النقط كتجمع؛ التخفيض التلقائي ما مفعلش دابا.')}</p>
+            <p className="text-sm text-slate-600">{text('1 point pour 10 DH de produits après remise, hors livraison, à la fin de la commande. Connectez-vous avant de commander. Les commandes invitées ne rapportent pas de points.', 'نقطة لكل 10 دراهم ديال الماكلة من بعد التخفيض، بلا مصاريف التوصيل، ملي كيتسالا الطلب. دخل للحساب قبل ما تطلب. الطلبات بلا حساب ما كتجمعش النقط.')}</p>
+            <p className="text-xs text-slate-500">{text('100 points = 10 DH de réduction. Cochez la récompense au moment de confirmer une commande, dès 10 DH de produits. Une utilisation par commande, dans ce restaurant. Les points sont rendus en cas d’annulation.','100 نقطة كتساوي تخفيض 10 دراهم. اختار التخفيض ملي كتأكد الطلب، من 10 دراهم ديال الماكلة. مرة فالطلب وفنفس المطعم. إلا تلغى الطلب النقط كيرجعو.')}</p>
           </div>
           <div className="flex justify-between items-center gap-3"><h2 className="font-bold">{text('Mes dernières commandes','آخر الطلبات ديالي')}</h2><button onClick={()=>setRefresh(x=>x+1)} className="text-sm text-orange-700 font-semibold">{text('Actualiser','حدّث')}</button></div>
-          {!history.length ? <p className="text-sm text-slate-500">{text('Aucune commande récente pour ce compte dans ce restaurant.','ما كاين حتى طلب جديد لهاد الحساب فهاد المطعم.')}</p> : <ul className="space-y-2">{history.map(order=><li key={order.id} className="rounded-xl border p-3 flex justify-between gap-3 text-sm"><div><p className="font-mono text-xs break-all">{order.order_number}</p><p className="text-slate-500 mt-1">{new Date(order.created_at).toLocaleDateString(ar ? 'ar-MA' : 'fr-MA')} · {statuses[order.status] || text('En cours','كيتمعالج')}</p></div><strong className="shrink-0">{Number(order.total).toFixed(2)} {text('DH','درهم')}</strong></li>)}</ul>}
+          {!history.length ? <p className="text-sm text-slate-500">{text('Aucune commande récente pour ce compte dans ce restaurant.','ما كاين حتى طلب جديد لهاد الحساب فهاد المطعم.')}</p> : <ul className="space-y-2">{history.map(order=><li key={order.id} className="rounded-xl border p-3 flex justify-between gap-3 text-sm"><div><p className="font-mono text-xs break-all">{order.order_number}</p><p className="text-slate-500 mt-1">{new Date(order.created_at).toLocaleDateString(ar ? 'ar-MA' : 'fr-MA')} · {statuses[order.status] || text('En cours','كيتمعالج')}</p>{Number(order.points_redeemed)>0 && <p className="text-emerald-700 text-xs mt-1">{order.status === 'cancelled' ? text('Récompense annulée : points rendus','التخفيض تلغى والنقط رجعو') : <>{order.points_redeemed} {text('points utilisés · remise','نقطة مستعملة · تخفيض')} {Number(order.discount_amount).toFixed(2)} DH</>}</p>}</div><strong className="shrink-0">{Number(order.total).toFixed(2)} {text('DH','درهم')}</strong></li>)}</ul>}
         </>}
         {message && <p role="status" className="rounded-xl bg-slate-100 p-3 text-sm">{message}</p>}
       </section>

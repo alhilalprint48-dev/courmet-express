@@ -86,8 +86,9 @@ function DeliveryPage() {
                 totalPrice: Number(o.subtotal) || 0,
               }
             ],
+            discountAmount: Number(o.discount_amount || 0), pointsRedeemed: Number(o.points_redeemed || 0),
             subtotal: Number(o.subtotal) || 0,
-            deliveryFee: Number(o.delivery_fee) || 15,
+            deliveryFee: Number(o.delivery_fee ?? 0),
             total: Number(o.total) || 0,
             customer: {
               fullName: o.customer_name || 'Client',
