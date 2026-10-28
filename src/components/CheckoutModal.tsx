@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
+import { CheckoutCaptcha } from './CheckoutCaptcha';
 import { useApp } from '@/context/AppContext';
 import { 
   X, 
@@ -61,6 +62,8 @@ export const CheckoutModal: React.FC = () => {
   const [isLocating, setIsLocating] = useState(false);
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null);
+  const [captchaAttempt, setCaptchaAttempt] = useState(0);
   const MAX_COD_LIMIT = 500;
 
   if (!isCheckoutOpen) return null;
@@ -93,6 +96,7 @@ export const CheckoutModal: React.FC = () => {
     e.preventDefault();
     setErrorMessage(null);
 
+    if (!captchaToken) { setErrorMessage(language === 'ar' ? 'أكد التحقق ضد الروبو.' : 'Validez le contrôle anti-robot.'); return; }
     const isDineIn = mode === 'dine_in';
     let finalFullName = fullName.trim();
     let cleanedPhone = '';
@@ -159,9 +163,9 @@ export const CheckoutModal: React.FC = () => {
       cashChangeAmount: cashChangeText,
       gpsCoords: isDineIn ? undefined : gpsCoords,
       deliveryTimeSlot: mode === 'takeaway' ? deliveryTimeSlot : undefined,
-    });
+    }, captchaToken);
     } catch (error) { setErrorMessage(error instanceof Error ? error.message : 'Commande refusée.'); }
-    finally { setIsSubmitting(false); }
+    finally { setIsSubmitting(false); setCaptchaToken(null); setCaptchaAttempt(x=>x+1); }
   };
 
   return (
@@ -466,6 +470,8 @@ export const CheckoutModal: React.FC = () => {
                 {language === 'ar' ? 'باش تجمع نقاط الوفاء، دخل لحسابك قبل ما تأكد الطلب.' : 'Pour cumuler des points de fidélité, connectez-vous avant de confirmer la commande.'}{' '}
                 <Link href="/compte" className="font-bold underline" onClick={() => setIsCheckoutOpen(false)}>{language === 'ar' ? 'حسابي' : 'Mon compte'}</Link>
               </p>
+
+              <CheckoutCaptcha key={captchaAttempt} onToken={setCaptchaToken} language={language} />
 
               {/* Payment Method Selector (Default: Pay on Delivery) */}
               <div className="space-y-2 pt-2">

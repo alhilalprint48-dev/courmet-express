@@ -19,15 +19,15 @@ BEGIN
  INSERT INTO private.staff_members(user_id,restaurant_id,role) VALUES(ua,a,'admin'),(ub,b,'admin');
  INSERT INTO public.blacklist(restaurant_id,phone) VALUES(b,'+212600000099');
  PERFORM set_config('request.jwt.claim.sub',ub::text,true);
- ob:=public.create_order(jsonb_build_object('restaurantId',b,'mode','dine_in','tableNumber','TEST B',
+ ob:=public.server_create_order(jsonb_build_object('restaurantId',b,'mode','dine_in','tableNumber','TEST B',
   'customer',jsonb_build_object('fullName','','phone','','paymentMethod','cash'),
-  'items',jsonb_build_array(jsonb_build_object('productId',pb,'quantity',1,'options','[]'::jsonb))));
+  'items',jsonb_build_array(jsonb_build_object('productId',pb,'quantity',1,'options','[]'::jsonb))),ub);
  PERFORM set_config('request.jwt.claim.sub',ua::text,true);
- EXECUTE 'SET LOCAL ROLE authenticated';
- oa:=public.create_order(jsonb_build_object('restaurantId',a,'mode','dine_in','tableNumber','TEST A',
+ oa:=public.server_create_order(jsonb_build_object('restaurantId',a,'mode','dine_in','tableNumber','TEST A',
   'total',1,'status','delivered',
   'customer',jsonb_build_object('fullName','','phone','','paymentMethod','cash'),
-  'items',jsonb_build_array(jsonb_build_object('productId',pa,'quantity',2,'options','[]'::jsonb))));
+  'items',jsonb_build_array(jsonb_build_object('productId',pa,'quantity',2,'options','[]'::jsonb))),ua);
+ EXECUTE 'SET LOCAL ROLE authenticated';
  IF oa->>'status'<>'new' OR (oa->>'total')::numeric<>84 OR oa->>'customer_phone'<>'' THEN RAISE EXCEPTION 'Commande ou prix canonique incorrect'; END IF;
  IF (SELECT count(*) FROM public.orders WHERE id=(oa->>'id')::uuid)<>1 THEN RAISE EXCEPTION 'A ne voit pas sa commande'; END IF;
  IF EXISTS(SELECT 1 FROM public.orders WHERE id=(ob->>'id')::uuid) THEN RAISE EXCEPTION 'A voit la commande de B'; END IF;

@@ -233,5 +233,23 @@ try {
   await as('postgres');
   eq('guest order earns no loyalty record',(await db.query('SELECT count(*)::int AS n FROM private.loyalty_ledger WHERE order_id=$1',[guest.id])).rows[0].n,0);
   eq('no public security definer added',(await db.query("SELECT count(*)::int AS n FROM pg_proc p JOIN pg_namespace ns ON ns.oid=p.pronamespace WHERE ns.nspname='public' AND prosecdef")).rows[0].n,0);
+  await as('postgres');
+  await sql('CREATE ROLE service_role');
+  await sql(readFileSync(new URL('../supabase-turnstile-server.sql',import.meta.url),'utf8'));
+  await sql(readFileSync(new URL('../supabase-turnstile-enforce.sql',import.meta.url),'utf8'));
+  await as('anon');
+  await reject('anonymous direct order RPC bypass closed',()=>create(order()),/permission denied/);
+  await reject('anonymous cannot call server RPC',()=>db.query('SELECT public.server_create_order($1,NULL)',[JSON.stringify(order())]),/permission denied/);
+  await reject('anonymous cannot retrieve CAPTCHA secret',()=>sql('SELECT public.checkout_turnstile_secret()'),/permission denied/);
+  await as('authenticated',ids.customer);
+  await reject('authenticated direct order RPC bypass closed',()=>create(order()),/permission denied/);
+  await reject('customer cannot forge server identity',()=>db.query('SELECT public.server_create_order($1,$2)',[JSON.stringify(order()),ids.other]),/permission denied/);
+  await reject('customer cannot retrieve CAPTCHA secret',()=>sql('SELECT public.checkout_turnstile_secret()'),/permission denied/);
+  await as('service_role');
+  const serverOrder=(await db.query('SELECT public.server_create_order($1,$2) AS result',[JSON.stringify(order({mode:'dine_in',tableNumber:'Server 1',customer:{phone:'',paymentMethod:'cash'}})),ids.customer])).rows[0].result;
+  eq('server assigns verified identity only',serverOrder.customer_user_id,ids.customer);
+  eq('server still calculates prices',Number(serverOrder.total),65);
+  const serverGuest=(await db.query('SELECT public.server_create_order($1,NULL) AS result',[JSON.stringify(order({mode:'dine_in',tableNumber:'Server 2',customer:{phone:'',paymentMethod:'cash'}}))])).rows[0].result;
+  eq('server guest has no account ownership',serverGuest.customer_user_id,null);
   console.log(`\n${checks} security checks passed (isolated PostgreSQL; no production calls).`);
 } catch (error) { console.error(error.message, error.where || ''); process.exitCode = 1; } finally { await db.close(); }

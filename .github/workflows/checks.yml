@@ -10,6 +10,7 @@ jobs:
     env:
       NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
       NEXT_PUBLIC_SUPABASE_ANON_KEY: build-only-placeholder
+      NEXT_PUBLIC_TURNSTILE_SITE_KEY: 1x00000000000000000000AA
       NEXT_TELEMETRY_DISABLED: '1'
     steps:
       - uses: actions/checkout@v4
@@ -21,10 +22,11 @@ jobs:
       - run: npm run lint -- --max-warnings 0
       - run: npx tsc --noEmit
       - run: npm run test:security
+      - run: npm run test:checkout
       - run: npm run build
       - name: Verify Nginx configuration and response headers
         run: |
-          docker build --build-arg NEXT_PUBLIC_SUPABASE_URL="$NEXT_PUBLIC_SUPABASE_URL" --build-arg NEXT_PUBLIC_SUPABASE_ANON_KEY="$NEXT_PUBLIC_SUPABASE_ANON_KEY" -t courmet-check .
+          docker build --build-arg NEXT_PUBLIC_SUPABASE_URL="$NEXT_PUBLIC_SUPABASE_URL" --build-arg NEXT_PUBLIC_SUPABASE_ANON_KEY="$NEXT_PUBLIC_SUPABASE_ANON_KEY" --build-arg NEXT_PUBLIC_TURNSTILE_SITE_KEY="$NEXT_PUBLIC_TURNSTILE_SITE_KEY" -t courmet-check .
           docker run --rm courmet-check nginx -t
           docker run -d --name courmet-check -p 127.0.0.1:3000:3000 courmet-check
           curl --retry 8 --retry-all-errors --retry-delay 1 --retry-connrefused --fail --silent --show-error -D /tmp/headers http://127.0.0.1:3000/ -o /dev/null
