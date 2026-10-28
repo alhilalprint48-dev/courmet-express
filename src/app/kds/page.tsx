@@ -137,6 +137,7 @@ function KdsPage() {
             mode: o.mode,
             tableNumber: o.table_number || (o.mode === 'dine_in' ? 'Table' : undefined),
             items: finalItems,
+            discountAmount: Number(o.discount_amount || 0), pointsRedeemed: Number(o.points_redeemed || 0),
             subtotal: Number(o.subtotal) || 0,
             deliveryFee: Number(o.delivery_fee) || 0,
             total: Number(o.total) || 0,
@@ -688,6 +689,7 @@ function KdsPage() {
                 <span>Livraison:</span>
                 <span>{selectedTicketOrder.deliveryFee} DH</span>
               </div>
+              {!!selectedTicketOrder.discountAmount && <div className="flex justify-between"><span>Fidélité ({selectedTicketOrder.pointsRedeemed} points):</span><span>−{selectedTicketOrder.discountAmount} DH</span></div>}
               <div className="flex justify-between font-black text-sm pt-1">
                 <span>TOTAL À ENCAISSER:</span>
                 <span>{selectedTicketOrder.total} DH</span>

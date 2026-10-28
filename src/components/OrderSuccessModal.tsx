@@ -58,7 +58,7 @@ ${currentOrder.customer.landmark ? `🏢 *Repère:* ${currentOrder.customer.land
 ${itemsList}
 
 💰 *Sous-total:* ${currentOrder.subtotal} DH
-${currentOrder.deliveryFee > 0 ? `🛵 *Frais de livraison:* ${currentOrder.deliveryFee} DH\n` : ''}💳 *TOTAL À RÉGLER:* *${currentOrder.total} DH*
+${currentOrder.discountAmount ? `🎁 *Réduction fidélité (100 points):* -${currentOrder.discountAmount} DH\n` : ''}${currentOrder.deliveryFee > 0 ? `🛵 *Frais de livraison:* ${currentOrder.deliveryFee} DH\n` : ''}💳 *TOTAL À RÉGLER:* *${currentOrder.total} DH*
 💵 *Mode de paiement:* ${paymentText}
 ------------------------------
 Merci de confirmer la prise en charge !`;
@@ -164,6 +164,7 @@ Merci de confirmer la prise en charge !`;
                 <span>{t.cart.subtotal}</span>
                 <span>{currentOrder.subtotal} {t.currency}</span>
               </div>
+              {!!currentOrder.discountAmount && <div className="flex justify-between text-emerald-700"><span>{language === 'ar' ? 'تخفيض الوفاء (100 نقطة)' : 'Réduction fidélité (100 points)'}</span><strong>−{currentOrder.discountAmount} {t.currency}</strong></div>}
               {currentOrder.deliveryFee > 0 && (
                 <div className="flex justify-between">
                   <span>{t.cart.deliveryFee}</span>

@@ -112,6 +112,8 @@ export interface Order {
   tableNumber?: string;
   items: CartItem[];
   subtotal: number;
+  discountAmount?: number;
+  pointsRedeemed?: number;
   deliveryFee: number;
   total: number;
   customer: CustomerDetails;

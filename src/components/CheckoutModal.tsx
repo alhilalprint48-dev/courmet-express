@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { CheckoutCaptcha } from './CheckoutCaptcha';
 import { useApp } from '@/context/AppContext';
@@ -24,6 +24,7 @@ import {
   CheckCircle2
 } from 'lucide-react';
 import { PaymentMethod } from '@/types';
+import { useCheckoutLoyalty } from '@/hooks/useCheckoutLoyalty';
 import { normalizePhone } from '@/lib/phone';
 
 export const CheckoutModal: React.FC = () => {
@@ -36,7 +37,7 @@ export const CheckoutModal: React.FC = () => {
     updateQuantity, 
     subtotal, 
     deliveryFee, 
-    total, 
+    total: cartTotal,
     mode, 
     tableNumber,
     setIsModeModalOpen,
@@ -65,6 +66,11 @@ export const CheckoutModal: React.FC = () => {
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const [captchaAttempt, setCaptchaAttempt] = useState(0);
   const MAX_COD_LIMIT = restaurant.max_cash_amount;
+  const loyalty = useCheckoutLoyalty(restaurant.id, isCheckoutOpen);
+  const [redeemPoints, setRedeemPoints] = useState(false);
+  useEffect(() => { setRedeemPoints(false); }, [restaurant.id, isCheckoutOpen, loyalty.userId]);
+  const rewardAvailable = loyalty.canRedeem && subtotal >= 10;
+  const total = Math.max(0, cartTotal - (redeemPoints ? 10 : 0));
 
   if (!isCheckoutOpen) return null;
 
@@ -101,6 +107,10 @@ export const CheckoutModal: React.FC = () => {
     }
 
     if (!captchaToken) { setErrorMessage(language === 'ar' ? 'أكد التحقق ضد الروبو.' : 'Validez le contrôle anti-robot.'); return; }
+    if (redeemPoints && !rewardAvailable) {
+      setErrorMessage(language === 'ar' ? 'التخفيض ما متاحش دابا. تأكد من الرصيد ومن سلة فيها 10 دراهم على الأقل، ولا حيد الاختيار.' : 'Récompense indisponible : vérifiez votre solde et le minimum de 10 DH de produits, ou décochez la réduction.');
+      return;
+    }
     const isDineIn = mode === 'dine_in';
     let finalFullName = fullName.trim();
     let cleanedPhone = '';
@@ -172,8 +182,8 @@ export const CheckoutModal: React.FC = () => {
       cashChangeAmount: cashChangeText,
       gpsCoords: isDineIn ? undefined : gpsCoords,
       deliveryTimeSlot: mode === 'takeaway' ? deliveryTimeSlot : undefined,
-    }, captchaToken);
-    } catch (error) { setErrorMessage(error instanceof Error ? error.message : 'Commande refusée.'); }
+    }, captchaToken, redeemPoints);
+    } catch (error) { setErrorMessage(error instanceof Error ? error.message : 'Commande refusée.'); loyalty.refresh(); }
     finally { setIsSubmitting(false); setCaptchaToken(null); setCaptchaAttempt(x=>x+1); }
   };
 
@@ -280,6 +290,7 @@ export const CheckoutModal: React.FC = () => {
                     <span className="font-bold">{deliveryFee} {t.currency}</span>
                   </div>
                 )}
+                {redeemPoints && <div className="flex justify-between text-emerald-700"><span>{language === 'ar' ? 'تخفيض الوفاء (100 نقطة)' : 'Réduction fidélité (100 points)'}</span><strong>−10 {t.currency}</strong></div>}
                 <div className="flex justify-between text-sm font-black text-gray-900 pt-1 border-t border-gray-200">
                   <span>{t.cart.total}</span>
                   <span className="text-primary-600 font-black">{total} {t.currency}</span>
@@ -475,10 +486,18 @@ export const CheckoutModal: React.FC = () => {
                 </div>
               )}
 
-              <p className="rounded-xl bg-orange-50 border border-orange-100 p-3 text-xs text-orange-900">
-                {language === 'ar' ? 'باش تجمع نقاط الوفاء، دخل لحسابك قبل ما تأكد الطلب.' : 'Pour cumuler des points de fidélité, connectez-vous avant de confirmer la commande.'}{' '}
-                <Link href="/compte" className="font-bold underline" onClick={() => setIsCheckoutOpen(false)}>{language === 'ar' ? 'حسابي' : 'Mon compte'}</Link>
-              </p>
+              <div className="rounded-xl bg-orange-50 border border-orange-100 p-3 text-xs text-orange-900 space-y-2">
+                <p className="font-bold">{language === 'ar' ? '100 نقطة = تخفيض 10 دراهم' : '100 points = 10 DH de réduction'}</p>
+                {loyalty.loading ? <p role="status">{language === 'ar' ? 'كنشوفو رصيد النقط…' : 'Vérification du solde…'}</p> : loyalty.error ? <p>{language === 'ar' ? 'الرصيد ما بانش دابا. عاود المحاولة.' : 'Solde indisponible. Réessayez.'} <button type="button" onClick={loyalty.refresh} className="underline">{language === 'ar' ? 'عاود' : 'Actualiser'}</button></p> : loyalty.userId ? <>
+                  <p>{language === 'ar' ? 'الرصيد : ' : 'Solde : '}{loyalty.points} {language === 'ar' ? 'نقطة' : 'points'}</p>
+                  <label className="flex items-start gap-2 font-semibold">
+                    <input type="checkbox" checked={redeemPoints} disabled={!rewardAvailable && !redeemPoints} onChange={event => setRedeemPoints(event.target.checked)} />
+                    <span>{language === 'ar' ? 'نستعمل 100 نقطة باش ننقص 10 دراهم من هاد الطلب' : 'Utiliser 100 points pour retirer 10 DH de cette commande'}</span>
+                  </label>
+                  {!loyalty.canRedeem && <p>{language === 'ar' ? 'خاص 100 نقطة وبريد إلكتروني مؤكد.' : '100 points et un e-mail confirmé sont nécessaires.'}</p>}
+                </> : <p>{language === 'ar' ? 'دخل لحسابك باش تجمع وتستعمل النقط.' : 'Connectez-vous pour cumuler et utiliser vos points.'}{' '}<Link href={`/compte?r=${encodeURIComponent(restaurant.slug)}`} className="font-bold underline" onClick={() => setIsCheckoutOpen(false)}>{language === 'ar' ? 'حسابي' : 'Mon compte'}</Link></p>}
+                <p>{language === 'ar' ? 'مرة وحدة فالطلب، من 10 دراهم ديال الماكلة. بلا مصاريف التوصيل. النقط كيرجعو إلا تلغى الطلب.' : 'Une fois par commande, dès 10 DH de produits, hors livraison. Les points sont rendus si la commande est annulée.'}</p>
+              </div>
 
               <CheckoutCaptcha key={captchaAttempt} onToken={setCaptchaToken} language={language} />
 
