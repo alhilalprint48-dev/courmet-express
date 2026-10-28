@@ -1,7 +1,6 @@
 BEGIN;
 -- ==============================================================================
 -- SCHEMA MULTI-TENANT SAAS POUR FOOD ORDERING & KDS
--- Projet Supabase : https://xonihnqotjbnirwpajyu.supabase.co
 -- ==============================================================================
 
 -- 1. EXTENSIONS

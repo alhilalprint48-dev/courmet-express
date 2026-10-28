@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { 
   ChefHat, 
@@ -35,8 +35,29 @@ function KdsPage() {
   const [ticketType, setTicketType] = useState<'kitchen' | 'delivery'>('kitchen');
   const previousOrdersCount = React.useRef<number>(0);
 
+  // Audio beep generator using Web Audio API (no external asset needed)
+  const playAlertSound = useCallback(() => {
+    if (!soundEnabled || typeof window === 'undefined') return;
+    try {
+      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.connect(gain);
+      gain.connect(audioCtx.destination);
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(880, audioCtx.currentTime); // A5 note
+      osc.frequency.setValueAtTime(1200, audioCtx.currentTime + 0.15); // High beep
+      gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.4);
+      osc.start();
+      osc.stop(audioCtx.currentTime + 0.4);
+    } catch (e) {
+      console.warn("Audio Context blocked:", e);
+    }
+  }, [soundEnabled]);
+
   // Fetch persisted orders; authorization is enforced by Supabase RLS.
-  const fetchOrders = async () => {
+  const fetchOrders = useCallback(async () => {
     try {
       // 1. Fetch from Supabase
       const { data: supaOrders, error: supaErr } = await supabase
@@ -146,7 +167,7 @@ function KdsPage() {
     } catch (e) {
       console.warn("Failed to fetch KDS orders:", e);
     }
-  };
+  }, [playAlertSound]);
 
   useEffect(() => {
     fetchOrders();
@@ -168,28 +189,7 @@ function KdsPage() {
       clearInterval(interval);
       supabase.removeChannel(channel);
     };
-  }, []);
-
-  // Audio beep generator using Web Audio API (no external asset needed)
-  const playAlertSound = () => {
-    if (!soundEnabled || typeof window === 'undefined') return;
-    try {
-      const audioCtx = new (window.AudioContext || (window as any).webkitAudioContext)();
-      const osc = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
-      osc.connect(gain);
-      gain.connect(audioCtx.destination);
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(880, audioCtx.currentTime); // A5 note
-      osc.frequency.setValueAtTime(1200, audioCtx.currentTime + 0.15); // High beep
-      gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
-      gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.4);
-      osc.start();
-      osc.stop(audioCtx.currentTime + 0.4);
-    } catch (e) {
-      console.warn("Audio Context blocked:", e);
-    }
-  };
+  }, [fetchOrders]);
 
   const updateOrderStatus = async (orderId: string, nextStatus: OrderStatus) => {
     const { data, error } = await supabase.from('orders').update({ status: nextStatus }).eq('id', orderId).select('id');

@@ -88,3 +88,9 @@ L'application démarre automatiquement sur le port `3000` avec redémarrage auto
 Le bouton **Mon compte** permet aux clients de s'inscrire et de consulter leurs points et commandes. Les membres du personnel se connectent au même endroit et voient uniquement les accès permis par leur rôle en base. L'administration donne accès à la cuisine, aux livreurs et à la gestion du restaurant.
 
 Installer `supabase-customer-loyalty.sql` après les scripts de sécurité. Un client connecté avec e-mail confirmé gagne 1 point par tranche de 10 DH de produits après clôture de la commande. Les frais de livraison sont exclus. Aucun point invité ou rétroactif ; aucune remise automatique. Vérifier le SMTP, la Site URL et les Redirect URLs Supabase avant d'ouvrir l'inscription publique. La vitrine SaaS est retirée pour le moment.
+
+### Validation anti-robot des commandes
+
+Le checkout passe par la fonction serveur Supabase `create-order` et Turnstile. Voir SECURITY_DEPLOYMENT.md pour installer le secret dans Vault, les fonctions serveur, la clé publique de compilation et le script de fermeture des anciennes RPC. Le CAPTCHA n'est complet qu'après cette fermeture. Les commandes sur place restent sans téléphone ni code ; la validation anti-robot est commune aux trois modes.
+
+Contrôles : `npm run lint -- --max-warnings 0`, `npm run test:security`, `npm run test:checkout`, `npm audit`, `npm run build`.

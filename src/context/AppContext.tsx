@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { 
   Language, 
   ConsumptionMode, 
@@ -14,7 +14,7 @@ import {
 } from '@/types';
 import { translations } from '@/lib/translations';
 import { RESTAURANT_INFO, PRODUCTS as FALLBACK_PRODUCTS, CATEGORIES as FALLBACK_CATEGORIES } from '@/data/mockData';
-import { supabase } from '@/lib/supabase';
+import { supabase, supabaseUrl, supabaseAnonKey } from '@/lib/supabase';
 import { normalizePhone } from '@/lib/phone';
 
 export interface RestaurantData {
@@ -97,7 +97,7 @@ interface AppContextType {
   setCurrentOrder: (order: Order | null) => void;
   liveTrackingOrder: Order | null;
   setLiveTrackingOrder: (order: Order | null) => void;
-  placeOrder: (customer: CustomerDetails) => Promise<Order>;
+  placeOrder: (customer: CustomerDetails, captchaToken: string) => Promise<Order>;
 }
 
 const DEFAULT_RESTAURANT: RestaurantData = {
@@ -138,10 +138,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [liveTrackingOrder, setLiveTrackingOrder] = useState<Order | null>(null);
 
   const [blacklist, setBlacklist] = useState<string[]>([]);
-  const refreshBlacklist = async () => {
+  const refreshBlacklist = useCallback(async () => {
     const { data, error } = await supabase.from('blacklist').select('phone').eq('restaurant_id', restaurant.id);
     setBlacklist(error ? [] : (data || []).map(row => row.phone));
-  };
+  }, [restaurant.id]);
   useEffect(() => {
     void refreshBlacklist();
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
@@ -153,7 +153,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setTimeout(() => { void refreshBlacklist(); }, 0);
     });
     return () => subscription.unsubscribe();
-  }, [restaurant.id]);
+  }, [refreshBlacklist]);
   const addToBlacklist = async (phone: string) => {
     const { error } = await supabase.from('blacklist').insert({ phone: normalizePhone(phone), restaurant_id: restaurant.id });
     if (error) throw new Error('Ajout refusé. Vérifiez vos droits.');
@@ -390,15 +390,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setSelectedProductForModal(null);
   };
 
-  const placeOrder = async (customer: CustomerDetails): Promise<Order> => {
-    const { data, error } = await supabase.rpc('create_order', { payload: {
+  const placeOrder = async (customer: CustomerDetails, captchaToken: string): Promise<Order> => {
+    const payload = {
       restaurantId: restaurant.id, mode, tableNumber: mode === 'dine_in' ? tableNumber : null,
       customer: { ...customer, phone: mode === 'dine_in' ? '' : normalizePhone(customer.phone) },
       items: cart.map(item => ({ productId: item.product.id, quantity: item.quantity,
         options: item.selectedOptions.map(opt => ({ groupId: opt.groupId, optionId: opt.optionId })),
         specialInstructions: item.specialInstructions })),
-    } });
-    if (error || !data) throw new Error(error?.message || 'Commande non enregistrée. Réessayez.');
+    };
+    const { data: { session } } = await supabase.auth.getSession();
+    const headers: Record<string,string> = { 'Content-Type': 'application/json', apikey: supabaseAnonKey! };
+    if (session) headers.Authorization = 'Bearer ' + session.access_token;
+    const response = await fetch(supabaseUrl + '/functions/v1/create-order', {
+      method: 'POST', headers, body: JSON.stringify({ payload, captchaToken }),
+    });
+    const data = await response.json();
+    if (!response.ok || !data?.id) throw new Error(data?.error || 'Commande non enregistrée. Réessayez.');
     const newOrder: Order = {
       id: data.id, trackingToken: data.tracking_token, orderNumber: data.order_number, createdAt: data.created_at, status: data.status,
       mode: data.mode, tableNumber: data.table_number || undefined,
