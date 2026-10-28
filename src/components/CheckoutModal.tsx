@@ -29,6 +29,7 @@ import { normalizePhone } from '@/lib/phone';
 
 export const CheckoutModal: React.FC = () => {
   const { 
+    restaurant,
     isCheckoutOpen, 
     setIsCheckoutOpen, 
     cart, 
@@ -64,7 +65,7 @@ export const CheckoutModal: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [captchaToken, setCaptchaToken] = useState<string | null>(null);
   const [captchaAttempt, setCaptchaAttempt] = useState(0);
-  const MAX_COD_LIMIT = 500;
+  const MAX_COD_LIMIT = restaurant.max_cash_amount;
 
   if (!isCheckoutOpen) return null;
 
@@ -132,15 +133,13 @@ export const CheckoutModal: React.FC = () => {
         return;
       }
 
-      // Anti-fraud COD Limit check
-      if (total > MAX_COD_LIMIT && paymentMethod === 'cash') {
-        setErrorMessage(
-          language === 'ar'
-            ? `المبلغ يتجاوز ${MAX_COD_LIMIT} درهم. يرجى تأكيد الطلب هاتفياً أو تقليص الكمية.`
-            : `Le montant total dépasse le plafond autorisé de ${MAX_COD_LIMIT} DH en paiement à la livraison sans acompte.`
-        );
-        return;
-      }
+    }
+    // Match the server limit for every cash order, including orders at a table.
+    if (total > MAX_COD_LIMIT && paymentMethod === 'cash') {
+      setErrorMessage(language === 'ar'
+        ? `سقف الأداء نقداً هو ${MAX_COD_LIMIT} درهم. نقص الكمية أو اختار البطاقة.`
+        : `Le plafond de paiement en espèces est de ${MAX_COD_LIMIT} DH. Réduisez le panier ou choisissez la carte.`);
+      return;
     }
 
     let cashChangeText = undefined;

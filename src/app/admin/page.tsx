@@ -59,6 +59,8 @@ import { compressAndResizeImage, MAX_IMAGE_SIZE_KB } from '@/lib/imageUtils';
 
 function AdminPage() {
   const { 
+    restaurant,
+    updateCashLimit,
     categories, 
     addCategory, 
     deleteCategory, 
@@ -166,7 +168,25 @@ function AdminPage() {
   const [settingsSaved, setSettingsSaved] = useState(false);
 
   // Anti-fraud State
-  const [maxCodLimit, setMaxCodLimit] = useState(500); // 500 DH max COD
+  const [maxCodLimit, setMaxCodLimit] = useState(restaurant.max_cash_amount);
+  const [cashLimitSaving, setCashLimitSaving] = useState(false);
+  const [cashLimitMessage, setCashLimitMessage] = useState('');
+  React.useEffect(() => {
+    setMaxCodLimit(restaurant.max_cash_amount);
+  }, [restaurant.id, restaurant.max_cash_amount]);
+  const saveCashLimit = async () => {
+    setCashLimitSaving(true);
+    setCashLimitMessage('');
+    try {
+      if (!Number.isFinite(maxCodLimit) || maxCodLimit <= 0 || maxCodLimit > 100000 || Math.abs(Math.round(maxCodLimit * 100) - maxCodLimit * 100) > 0.000001) {
+        throw new Error('Saisissez un plafond entre 0,01 et 100 000 DH, avec deux décimales maximum.');
+      }
+      await updateCashLimit(maxCodLimit);
+      setCashLimitMessage('Plafond enregistré pour ce restaurant.');
+    } catch (error) {
+      setCashLimitMessage(error instanceof Error ? error.message : 'Enregistrement refusé.');
+    } finally { setCashLimitSaving(false); }
+  };
   const [newBlacklistPhone, setNewBlacklistPhone] = useState('');
 
   // Team Shared Credentials State
@@ -1045,7 +1065,7 @@ function AdminPage() {
               <AlertOctagon className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
               <div className="text-xs text-amber-800">
                 <span className="font-bold block">Sécurisation du Paiement à la Livraison (Cash-on-Delivery)</span>
-                Le système filtre automatiquement les numéros douteux et plafonne le montant maximal sans pré-paiement pour éliminer les fausses commandes ou refus de livraison.
+                Le CAPTCHA, la liste noire et le plafond espèces limitent les abus. Le personnel doit confirmer les commandes hors salle par WhatsApp avant de les accepter.
               </div>
             </div>
 
@@ -1054,19 +1074,26 @@ function AdminPage() {
               <h3 className="font-extrabold text-sm text-slate-900">Règles & Plafonnement</h3>
               <div>
                 <label className="text-xs font-bold text-slate-700 block mb-1">
-                  Plafond maximum autorisé pour paiement à la livraison (DH)
+                  Plafond de paiement en espèces (DH)
                 </label>
                 <input
                   type="number"
-                  value={500} readOnly
+                  value={maxCodLimit}
+                  min="0.01" max="100000" step="0.01"
+                  onChange={(e) => setMaxCodLimit(Number(e.target.value))}
                   className="w-full p-2.5 text-sm border rounded-xl max-w-xs"
                 />
                 <p className="text-[11px] text-slate-400 mt-1">
-                  Au-delà de ce montant, la commande nécessite une confirmation téléphonique préalable du gérant.
+                  Appliqué en base à toutes les commandes en espèces, frais de livraison compris. Au-delà, le client doit réduire le panier ou choisir la carte.
                 </p>
               </div>
 
-              <p className="text-xs">Sur place : table requise, sans téléphone ni code. Livraison et retrait : téléphone requis et confirmation manuelle WhatsApp avant acceptation. Plafond espèces : 500 DH.</p>
+              <button type="button" disabled={cashLimitSaving} onClick={saveCashLimit}
+                className="bg-orange-600 text-white font-bold px-4 py-2 rounded-xl text-xs disabled:opacity-50">
+                {cashLimitSaving ? 'Enregistrement…' : 'Enregistrer le plafond'}
+              </button>
+              {cashLimitMessage && <p role="status" className="text-xs">{cashLimitMessage}</p>}
+              <p className="text-xs">Sur place : table requise, sans téléphone ni code. Livraison et retrait : téléphone requis et confirmation manuelle WhatsApp avant acceptation.</p>
             </div>
 
             {/* Blacklist Management */}

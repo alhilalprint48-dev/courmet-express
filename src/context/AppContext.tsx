@@ -28,6 +28,7 @@ export interface RestaurantData {
   currency: string;
   delivery_fee: number;
   min_delivery_amount: number;
+  max_cash_amount: number;
   is_active: boolean;
 }
 
@@ -41,6 +42,7 @@ interface AppContextType {
   restaurant: RestaurantData;
   availableRestaurants: { id: string; slug: string; name: string }[];
   switchRestaurant: (slug: string) => void;
+  updateCashLimit: (amount: number) => Promise<void>;
   isRestaurantSuspended: boolean;
 
   // Categories & Products from Supabase
@@ -111,6 +113,7 @@ const DEFAULT_RESTAURANT: RestaurantData = {
   currency: 'DH',
   delivery_fee: RESTAURANT_INFO.deliveryFee,
   min_delivery_amount: RESTAURANT_INFO.minDeliveryAmount,
+  max_cash_amount: 500,
   is_active: true,
 };
 
@@ -213,6 +216,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         currency: restoData.currency || 'DH',
         delivery_fee: Number(restoData.delivery_fee) || 15,
         min_delivery_amount: Number(restoData.min_delivery_amount) || 50,
+        max_cash_amount: Number(restoData.max_cash_amount ?? 500),
         is_active: restoData.is_active,
       });
 
@@ -471,6 +475,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setCategories(prev => prev.filter(c => c.id !== categoryId));
   };
 
+  const updateCashLimit = async (amount: number) => {
+    const { data, error } = await supabase.rpc('update_cash_limit', { tenant: restaurant.id, amount });
+    if (error || data == null) throw new Error('Enregistrement du plafond refusé.');
+    setRestaurant(prev => ({ ...prev, max_cash_amount: Number(data) }));
+  };
+
   return (
     <AppContext.Provider
       value={{
@@ -481,6 +491,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         restaurant,
         availableRestaurants,
         switchRestaurant,
+        updateCashLimit,
         isRestaurantSuspended: !restaurant.is_active,
         categories,
         setCategories,

@@ -94,3 +94,6 @@ Installer `supabase-customer-loyalty.sql` après les scripts de sécurité. Un c
 Le checkout passe par la fonction serveur Supabase `create-order` et Turnstile. Voir SECURITY_DEPLOYMENT.md pour installer le secret dans Vault, les fonctions serveur, la clé publique de compilation et le script de fermeture des anciennes RPC. Le CAPTCHA n'est complet qu'après cette fermeture. Les commandes sur place restent sans téléphone ni code ; la validation anti-robot est commune aux trois modes.
 
 Contrôles : `npm run lint -- --max-warnings 0`, `npm run test:security`, `npm run test:checkout`, `npm audit`, `npm run build`.
+
+### Plafond espèces par restaurant
+Installer `supabase-cash-limit.sql` après les migrations de sécurité et Turnstile. Le défaut reste 500 DH ; Admin → Anti-fraude → Enregistrer le plafond permet de le régler par restaurant (0,01 à 100 000 DH). Le serveur contrôle le total, livraison comprise, pour toute commande en espèces. Seuls l'admin du restaurant et le super-admin peuvent le modifier. Le script conserve la fermeture des anciennes RPC. Le CAPTCHA ne prouve pas l'intention d'achat : les commandes hors salle restent à confirmer manuellement par WhatsApp avant acceptation.
