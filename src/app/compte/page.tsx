@@ -25,13 +25,19 @@ export default function AccountPage() {
   const [message, setMessage] = useState('');
   const [points, setPoints] = useState<number | null>(null);
   const [history, setHistory] = useState<History[]>([]);
+  const [accountError,setAccountError] = useState(false);
+  const [historyError,setHistoryError] = useState(false);
+  const [staffError,setStaffError] = useState(false);
   const [refresh, setRefresh] = useState(0);
 
   useEffect(() => {
     let active = true, generation = 0;
     const load = async () => {
       const current = ++generation;
-      const { data: { user: signedIn } } = await supabase.auth.getUser();
+      setChecking(true); setAccountError(false); setHistoryError(false); setStaffError(false);
+      try {
+      const { data: { user: signedIn }, error: identityError } = await supabase.auth.getUser();
+      if (identityError && identityError.name !== "AuthSessionMissingError") throw identityError;
       if (!active || current !== generation) return;
       setUser(signedIn); setRole(null); setPoints(null); setHistory([]);
       if (signedIn && restaurant.id) {
@@ -44,11 +50,14 @@ export default function AccountPage() {
             .order('created_at', { ascending: false }).limit(20),
         ]);
         if (!active || current !== generation) return;
+        setStaffError(Boolean(access.error));
+        setHistoryError(Boolean(orders.error));
         if (!access.error && ['admin','superadmin','kds','livreur'].includes(access.data)) setRole(access.data);
         if (!loyalty.error) setPoints(Number(loyalty.data?.points || 0));
         if (!orders.error) setHistory(orders.data || []);
       }
-      if (active && current === generation) setChecking(false);
+      } catch { if (active && current === generation) {setAccountError(true);setRole(null);setPoints(null);setHistory([]);} }
+      finally {if (active && current === generation) setChecking(false);}
     };
     void load();
     const { data: { subscription } } = supabase.auth.onAuthStateChange(event => {
@@ -126,7 +135,7 @@ export default function AccountPage() {
       </div>
       <section className="bg-white rounded-3xl border border-slate-200 p-5 sm:p-8 shadow-sm space-y-5">
         <div className="flex items-center gap-3"><UserRound className="text-orange-600" /><h1 className="text-2xl font-extrabold">{text('Mon compte','حسابي')}</h1></div>
-        {checking ? <p>{text('Vérification de la session…','كنتأكدو من الحساب…')}</p> : recovery && user ? <form onSubmit={changePassword} className="space-y-4">
+        {checking ? <p>{text('Vérification de la session…','كنتأكدو من الحساب…')}</p> : accountError ? <div role="alert" className="space-y-3"><p>{text('Votre compte ne peut pas être chargé. Vérifiez la connexion puis réessayez.','ما قدرناش نجيبو الحساب. تأكد من الاتصال وعاود المحاولة.')}</p><button onClick={()=>setRefresh(x=>x+1)} className="underline">{text('Réessayer','عاود المحاولة')}</button></div> : recovery && user ? <form onSubmit={changePassword} className="space-y-4">
           <h2 className="font-bold">{text('Choisir un nouveau mot de passe','اختار كلمة سر جديدة')}</h2>
           <label className="block">{text('Nouveau mot de passe','كلمة السر الجديدة')}<input type="password" minLength={12} required autoComplete="new-password" value={password} onChange={event => setPassword(event.target.value)} className="block w-full border rounded-xl p-3 mt-1" /></label>
           <label className="block">{text('Confirmer le mot de passe','أكد كلمة السر')}<input type="password" minLength={12} required autoComplete="new-password" value={passwordConfirmation} onChange={event => setPasswordConfirmation(event.target.value)} className="block w-full border rounded-xl p-3 mt-1" /></label>
@@ -146,6 +155,7 @@ export default function AccountPage() {
           <button disabled={busy || !email.trim()} onClick={resend} className="text-sm text-orange-700 underline disabled:opacity-50">{text('Renvoyer le lien de confirmation','عاود صيفط رابط التأكيد')}</button>
         </> : <>
           <div className="flex flex-wrap items-center justify-between gap-3"><p className="text-sm break-all">{user.email}</p><button onClick={async()=>{setBusy(true); try { const {error}=await supabase.auth.signOut(); if(error) setMessage(text('Déconnexion impossible. Réessayez.','ما قدرناش نخرجو الحساب. عاود المحاولة.')); } finally {setBusy(false);} }} disabled={busy} className="flex gap-2 items-center text-sm font-bold text-slate-600"><LogOut size={16}/>{text('Se déconnecter','نخرج')}</button></div>
+          {staffError && <p role="alert">{text("Accès du personnel indisponible. Actualisez pour réessayer.","ولوج العاملين ما خدامش دابا. عاود حدّث الصفحة.")}</p>}
           {role && <div className="rounded-2xl bg-slate-950 p-4 text-white space-y-3">
             <h2 className="font-bold">{text('Espace du personnel','فضاء العاملين')}</h2>
             <div className="grid sm:grid-cols-3 gap-2">
@@ -163,7 +173,7 @@ export default function AccountPage() {
             <p className="text-xs text-slate-500">{text('100 points = 10 DH de réduction. Cochez la récompense au moment de confirmer une commande, dès 10 DH de produits. Une utilisation par commande, dans ce restaurant. Les points sont rendus en cas d’annulation.','100 نقطة كتساوي تخفيض 10 دراهم. اختار التخفيض ملي كتأكد الطلب، من 10 دراهم ديال الماكلة. مرة فالطلب وفنفس المطعم. إلا تلغى الطلب النقط كيرجعو.')}</p>
           </div>
           <div className="flex justify-between items-center gap-3"><h2 className="font-bold">{text('Mes dernières commandes','آخر الطلبات ديالي')}</h2><button onClick={()=>setRefresh(x=>x+1)} className="text-sm text-orange-700 font-semibold">{text('Actualiser','حدّث')}</button></div>
-          {!history.length ? <p className="text-sm text-slate-500">{text('Aucune commande récente pour ce compte dans ce restaurant.','ما كاين حتى طلب جديد لهاد الحساب فهاد المطعم.')}</p> : <ul className="space-y-2">{history.map(order=><li key={order.id} className="rounded-xl border p-3 flex justify-between gap-3 text-sm"><div><p className="font-mono text-xs break-all">{order.order_number}</p><p className="text-slate-500 mt-1">{new Date(order.created_at).toLocaleDateString(ar ? 'ar-MA' : 'fr-MA')} · {statuses[order.status] || text('En cours','كيتمعالج')}</p>{Number(order.points_redeemed)>0 && <p className="text-emerald-700 text-xs mt-1">{order.status === 'cancelled' ? text('Récompense annulée : points rendus','التخفيض تلغى والنقط رجعو') : <>{order.points_redeemed} {text('points utilisés · remise','نقطة مستعملة · تخفيض')} {Number(order.discount_amount).toFixed(2)} DH</>}</p>}</div><strong className="shrink-0">{Number(order.total).toFixed(2)} {text('DH','درهم')}</strong></li>)}</ul>}
+          {historyError ? <p role="alert" className="text-red-700">{text("Historique indisponible. Il ne s’agit pas d’un historique vide. Actualisez pour réessayer.","ما قدرناش نجيبو الطلبات. هاد الشي ما كيعنيش ما عندك حتى طلب. عاود حدّث الصفحة.")}</p> : !history.length ? <p className="text-sm text-slate-500">{text('Aucune commande récente pour ce compte dans ce restaurant.','ما كاين حتى طلب جديد لهاد الحساب فهاد المطعم.')}</p> : <ul className="space-y-2">{history.map(order=><li key={order.id} className="rounded-xl border p-3 flex justify-between gap-3 text-sm"><div><p className="font-mono text-xs break-all">{order.order_number}</p><p className="text-slate-500 mt-1">{new Date(order.created_at).toLocaleDateString(ar ? 'ar-MA' : 'fr-MA')} · {statuses[order.status] || text('En cours','كيتمعالج')}</p>{Number(order.points_redeemed)>0 && <p className="text-emerald-700 text-xs mt-1">{order.status === 'cancelled' ? text('Récompense annulée : points rendus','التخفيض تلغى والنقط رجعو') : <>{order.points_redeemed} {text('points utilisés · remise','نقطة مستعملة · تخفيض')} {Number(order.discount_amount).toFixed(2)} DH</>}</p>}</div><strong className="shrink-0">{Number(order.total).toFixed(2)} {text('DH','درهم')}</strong></li>)}</ul>}
         </>}
         {message && <p role="status" className="rounded-xl bg-slate-100 p-3 text-sm">{message}</p>}
       </section>

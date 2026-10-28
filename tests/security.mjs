@@ -573,5 +573,43 @@ try {
   const journal=(await db.query('SELECT public.order_event_log($1) AS result',[opsTenant])).rows[0].result;
   eq('journal contains recorded archive events',journal.some(event=>event.event==='archived'),true);
   await reject('raw journal remains private',()=>sql('SELECT * FROM private.order_events'),/permission denied/);
+  await as('postgres');
+  await db.query("UPDATE public.orders SET created_at=now()-interval '2 minutes' WHERE restaurant_id=$1",[opsTenant]);
+  const hoursSql=readFileSync(new URL('../supabase-opening-schedule.sql',import.meta.url),'utf8');
+  await sql(hoursSql);await sql(hoursSql);
+  await sql(readFileSync(new URL('../supabase-catalog-price-check.sql',import.meta.url),'utf8'));
+  const weekly=Array.from({length:7},()=>[]);weekly[1]=[{start:'11:30',end:'14:00'},{start:'19:00',end:'02:00'}];
+  for(const [moment,expected] of [['2026-10-26T11:30:00Z',true],['2026-10-26T14:00:00Z',false],['2026-10-26T16:00:00Z',false],['2026-10-27T01:30:00Z',true],['2026-10-27T02:00:00Z',false],['2026-10-25T12:00:00Z',false],['2026-02-23T11:00:00Z',false],['2026-07-06T10:30:00Z',true]]){
+   eq('SQL Casablanca schedule '+moment,(await db.query('SELECT private.weekly_schedule_open($1,$2::timestamptz) AS open',[JSON.stringify(weekly),moment])).rows[0].open,expected);
+  }
+  const saveHours=(tenant,enabled,schedule)=>db.query('SELECT public.update_opening_schedule($1,$2,$3::jsonb) AS result',[tenant,enabled,JSON.stringify(schedule)]);
+  await as('anon');await reject('guest cannot edit hours',()=>saveHours(opsTenant,true,weekly),/permission denied/);
+  await as('authenticated',ids.driver);await reject('driver cannot edit hours',()=>saveHours(opsTenant,true,weekly),/Modification refusée/);
+  await as('authenticated',ids.manager);
+  await reject('manager cannot edit foreign hours',()=>saveHours(ids.b,true,weekly),/Modification refusée/);
+  await reject('invalid day count rejected',()=>saveHours(opsTenant,true,[]),/Horaires invalides/);
+  const invalid=structuredClone(weekly);invalid[1]=[{start:'25:00',end:'26:00'}];
+  await reject('invalid clock rejected',()=>saveHours(opsTenant,true,invalid),/Horaires invalides/);
+  invalid[1]=[{start:'11:00',end:'11:00'}];await reject('zero length period rejected',()=>saveHours(opsTenant,true,invalid),/Horaires invalides/);
+  await reject('empty enabled schedule rejected',()=>saveHours(opsTenant,true,Array.from({length:7},()=>[])),/Ajoutez/);
+  const outside=Array.from({length:7},()=>[]);
+  const localDay=Number((await db.query("SELECT extract(dow FROM now() AT TIME ZONE 'Africa/Casablanca') AS day")).rows[0].day);
+  outside[(localDay+3)%7]=[{start:'11:00',end:'12:00'}];
+  await saveHours(opsTenant,true,outside);
+  const pickup={restaurantId:opsTenant,mode:'takeaway',customer:{fullName:'TEST',phone:'0611223399',paymentMethod:'cash',deliveryTimeSlot:'12:15 - 12:45'},items:[{productId:opsProduct,quantity:1,expectedUnitPrice:20}]};
+  await as('postgres');await reject('server rejects checkout outside automatic hours',()=>db.query('SELECT public.server_create_order($1,NULL)',[JSON.stringify(pickup)]),/Restaurant fermé/);
+  await as('authenticated',ids.manager);await saveHours(opsTenant,false,outside);
+  await db.query('UPDATE public.products SET price=21,name_fr=$1 WHERE id=$2 AND restaurant_id=$3',['Nouveau nom',opsProduct,opsTenant]);
+  await as('postgres');await reject('stale basket price rejected after menu update',()=>db.query('SELECT public.server_create_order($1,NULL)',[JSON.stringify(pickup)]),/Prix modifié/);
+  pickup.items[0].expectedUnitPrice=21;
+  const accepted=(await db.query('SELECT public.server_create_order($1,NULL) AS result',[JSON.stringify(pickup)])).rows[0].result;
+  eq('updated canonical menu price applies',Number(accepted.total),21);
+  eq('pickup time cannot forge a guaranteed appointment',accepted.delivery_timeslot,'Au plus vite — délai à confirmer par le restaurant');
+  eq('previous completed sale retains original total',Number((await db.query('SELECT total FROM public.orders WHERE id=$1',[onsite.id])).rows[0].total),20);
+  eq('previous order item retains its original label',(await db.query('SELECT product_name_fr FROM public.order_items WHERE order_id=$1',[onsite.id])).rows[0].product_name_fr,'Ops');
+  await as('authenticated',ids.manager);await db.query('SELECT public.update_restaurant_availability($1,false)',[opsTenant]);
+  await as('postgres');pickup.customer.phone='0611223388';
+  await reject('manual suspension overrides schedule mode',()=>db.query('SELECT public.server_create_order($1,NULL)',[JSON.stringify(pickup)]),/Restaurant fermé/);
+  await as('authenticated',ids.kitchen);eq('kitchen cannot edit menu',(await db.query('UPDATE public.products SET price=1 WHERE id=$1 RETURNING id',[opsProduct])).rows.length,0);
   console.log(`\n${checks} security checks passed (isolated PostgreSQL; no production calls).`);
 } catch (error) { console.error(error.message, error.where || ''); process.exitCode = 1; } finally { await db.close(); }

@@ -1,5 +1,6 @@
 'use client';
 
+import { scheduleLabel } from '@/lib/opening-hours.mjs';
 import { useApp } from '@/context/AppContext';
 
 export function RestaurantInfo() {
@@ -14,7 +15,7 @@ export function RestaurantInfo() {
       </>}
     </div>
     <div className="text-xs text-slate-700 space-y-1">
-      {restaurant.open_hours && <p><strong>{ar ? 'التوقيت : ' : 'Horaires : '}</strong>{restaurant.open_hours}</p>}
+      {(restaurant.schedule_enabled || restaurant.open_hours) && <p><strong>{ar ? 'التوقيت : ' : 'Horaires : '}</strong>{restaurant.schedule_enabled ? scheduleLabel(restaurant.weekly_schedule) : restaurant.open_hours}</p>}
       {restaurant.address && <p>{restaurant.address}</p>}
       {restaurant.phone && <a className="inline-block underline font-semibold" href={`tel:${restaurant.phone}`}>{ar ? 'اتصل : ' : 'Téléphone : '}{restaurant.phone}</a>}
     </div>

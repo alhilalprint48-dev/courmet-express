@@ -16,6 +16,7 @@ import { translations } from '@/lib/translations';
 import { RESTAURANT_INFO } from '@/data/mockData';
 import { supabase, supabaseUrl, supabaseAnonKey } from '@/lib/supabase';
 import { fetchRestaurantData } from '@/lib/restaurant-data.mjs';
+import { acceptingOrders, emptySchedule } from '@/lib/opening-hours.mjs';
 import { normalizePhone } from '@/lib/phone';
 
 export interface RestaurantData {
@@ -32,6 +33,9 @@ export interface RestaurantData {
   max_cash_amount: number;
   is_active: boolean;
   is_open: boolean;
+  manual_open?: boolean;
+  schedule_enabled: boolean;
+  weekly_schedule: { start: string; end: string }[][];
   open_hours: string;
   closed_message: string;
 }
@@ -125,6 +129,7 @@ const DEFAULT_RESTAURANT: RestaurantData = {
   max_cash_amount: 500,
   is_active: false,
   is_open: false,
+  schedule_enabled: false, weekly_schedule: emptySchedule(),
   open_hours: '',
   closed_message: '',
 };
@@ -132,6 +137,8 @@ const DEFAULT_RESTAURANT: RestaurantData = {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
+  const [, setClockTick] = useState(0);
+  useEffect(() => { const timer = setInterval(() => setClockTick(t => t + 1), 30000); return () => clearInterval(timer); }, []);
   const [language, setLanguageState] = useState<Language>('fr');
   const [restaurant, setRestaurant] = useState<RestaurantData>(DEFAULT_RESTAURANT);
   const restaurantMutationVersion = useRef(0);
@@ -146,7 +153,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [mode, setMode] = useState<ConsumptionMode>('delivery');
   const [tableNumber, setTableNumber] = useState<string>('Table 1');
   const [deliveryAddress, setDeliveryAddress] = useState<string>('');
-  const [deliveryTimeSlot, setDeliveryTimeSlot] = useState<string>('Au plus vite (~25-35 min)');
+  const [deliveryTimeSlot, setDeliveryTimeSlot] = useState<string>('Au plus vite — délai à confirmer par le restaurant');
   const [gpsCoords, setGpsCoords] = useState<{ lat: number; lng: number } | undefined>(undefined);
   const [isModeModalOpen, setIsModeModalOpen] = useState<boolean>(true);
   
@@ -210,7 +217,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       setRestaurant({ id: row.id, slug: row.slug, name: row.name, tagline: row.tagline || '', phone: row.phone || '',
         whatsapp_number: row.whatsapp_number || '', address: row.address || '', currency: row.currency || 'DH',
         delivery_fee: Number(row.delivery_fee ?? 0), min_delivery_amount: Number(row.min_delivery_amount ?? 0),
-        max_cash_amount: Number(row.max_cash_amount ?? 500), is_active: row.is_active, is_open: row.is_open,
+        max_cash_amount: Number(row.max_cash_amount ?? 500), is_active: row.is_active, is_open: row.is_open, schedule_enabled: row.schedule_enabled || false, weekly_schedule: row.weekly_schedule || emptySchedule(),
         open_hours: row.open_hours || '', closed_message: row.closed_message || '' });
       setCategories(data.categories.map((category: any) => ({ id: category.id, name: { fr: category.name_fr, ar: category.name_ar || category.name_fr }, iconName: category.icon_name || 'UtensilsCrossed' })));
       setProducts(data.products.map((product: any) => ({ id: product.id, categoryId: product.category_id || '',
@@ -281,7 +288,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       if (document.hidden) return;
       const revision = restaurantMutationVersion.current;
       const { data, error } = await supabase.from('restaurants')
-        .select('id,name,address,phone,open_hours,is_open,closed_message,is_active,delivery_fee,min_delivery_amount,whatsapp_number,max_cash_amount')
+        .select('id,name,address,phone,open_hours,is_open,schedule_enabled,weekly_schedule,closed_message,is_active,delivery_fee,min_delivery_amount,whatsapp_number,max_cash_amount')
         .eq('id', restaurant.id).maybeSingle();
       if (!active || error || revision !== restaurantMutationVersion.current) return;
       if (!data) { setRestaurant(prev => prev.id === restaurant.id ? { ...prev, is_active: false } : prev); return; }
@@ -303,7 +310,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     quantity: number,
     instructions?: string
   ) => {
-    if (!restaurant.is_open || !restaurant.is_active) return;
+    if (!acceptingOrders(restaurant)) return;
     const optionsTotal = selectedOptions.reduce((acc, opt) => acc + opt.price, 0);
     const unitPrice = product.price + optionsTotal;
     const totalPrice = unitPrice * quantity;
@@ -375,10 +382,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   };
 
   const placeOrder = async (customer: CustomerDetails, captchaToken: string, redeemPoints = false): Promise<Order> => {
+    if (!acceptingOrders(restaurant)) throw new Error('Restaurant fermé.');
     const payload = {
       restaurantId: restaurant.id, redeemPoints, mode, tableNumber: mode === 'dine_in' ? tableNumber : null,
       customer: { ...customer, phone: mode === 'dine_in' ? '' : normalizePhone(customer.phone) },
-      items: cart.map(item => ({ productId: item.product.id, quantity: item.quantity,
+      items: cart.map(item => ({ productId: item.product.id, quantity: item.quantity, expectedUnitPrice: item.unitPrice,
         options: item.selectedOptions.map(opt => ({ groupId: opt.groupId, optionId: opt.optionId })),
         specialInstructions: item.specialInstructions })),
     };
@@ -495,7 +503,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setLanguage,
         t,
         isRtl,
-        restaurant,
+        restaurant: { ...restaurant, manual_open: restaurant.is_open, is_open: acceptingOrders(restaurant) },
         availableRestaurants,
         switchRestaurant,
         updateCashLimit,
