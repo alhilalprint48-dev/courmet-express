@@ -124,3 +124,14 @@ Mon compte distingue une panne de session, un historique indisponible et un hist
 - Configurer un fournisseur SMTP et un domaine d’expédition vérifié, puis tester inscription, confirmation et récupération depuis une vraie boîte. Aucun secret SMTP ne doit être placé dans Git ou dans une variable `NEXT_PUBLIC_`.
 - Vérifier la politique de sauvegarde du projet, effectuer une restauration sur un environnement séparé et contrôler commandes, lignes, membres et fidélité. Ne jamais tester une restauration en écrasant le restaurant de production.
 - Effectuer un service pilote sur les vrais appareils : son après activation, écran réveillé, perte/reprise du réseau, impression et parcours du livreur. Le site n’exécute pas un service de commande hors connexion et ne garantit pas les alertes d’un onglet suspendu.
+
+
+### Vérification gratuite des nouveaux mots de passe dans les formulaires
+
+L’inscription et la réinitialisation via `/compte` vérifient les mots de passe dans Pwned Passwords (Have I Been Pwned), après soumission complète uniquement. Le navigateur calcule SHA-1 localement et ne transmet que ses cinq premiers caractères hexadécimaux, sans adresse e-mail, mot de passe, empreinte complète, cookie ni jeton Supabase. Les résultats sont comparés localement ; le remplissage de réponse est demandé avec `Add-Padding`. Aucune donnée de mot de passe n’est journalisée ou persistée par cette vérification.
+
+Un mot de passe trouvé dans les fuites est refusé avant l’appel d’inscription ou de modification. Une panne, un délai dépassé ou une réponse invalide bloque cette opération et affiche un message de nouvelle tentative ; la connexion avec un compte existant reste disponible.
+
+**Portée :** cette couche protège les formulaires du site. Elle peut être contournée par un appel direct à l’API Auth publique et ne remplace pas la protection serveur native de Supabase. L’avertissement Security Advisor reste donc légitime tant que la protection native n’est pas activée sur une offre compatible. Aucun abonnement payant n’est souscrit par cette modification. Un résultat absent du corpus ne prouve pas qu’un mot de passe est sûr.
+
+Vérification locale : `npm run test:passwords` (réponses et pannes simulées, aucun secret réel ni création de compte).

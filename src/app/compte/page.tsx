@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 import type { User } from '@supabase/supabase-js';
 import { UserRound, Gift, ChefHat, Bike, Settings, ArrowLeft, LogOut } from 'lucide-react';
+import { requireSafePassword, PasswordSafetyError } from '@/lib/password-safety.mjs';
 import { supabase } from '@/lib/supabase';
 import { useApp } from '@/context/AppContext';
 import type { StaffRole } from '@/components/StaffAuthGate';
@@ -80,16 +81,23 @@ export default function AccountPage() {
     }
   }, [ar]);
 
+  const passwordSafetyMessage = (failure: unknown) => {
+    if (!(failure instanceof PasswordSafetyError)) return null;
+    if (failure.code === 'compromised') return text('Ce mot de passe figure dans des fuites connues. Choisissez-en un autre, unique à ce site.', 'كلمة السر هادي كاينة فتسريبات معروفة. اختار وحدة أخرى خاصة بهاد الموقع.');
+    if (failure.code === 'too_short' || failure.code === 'too_long') return text('Choisissez un mot de passe de 12 à 1 024 caractères.', 'اختار كلمة سر فيها ما بين 12 و1024 حرف.');
+    return text('Vérification de sécurité indisponible. Aucun nouveau mot de passe n’a été enregistré. Réessayez dans un instant.', 'التحقق الأمني ما خدامش دابا. ما تسجلات حتى كلمة سر جديدة. عاود المحاولة من بعد.');
+  };
   const submit = async (e: React.FormEvent) => {
     e.preventDefault(); setBusy(true); setMessage('');
     try {
+      if (signup) await requireSafePassword(password);
       const { error } = signup
         ? await supabase.auth.signUp({ email: email.trim(), password, options: { emailRedirectTo: `${window.location.origin}/compte` } })
         : await supabase.auth.signInWithPassword({ email: email.trim(), password });
       setPassword('');
       if (error) setMessage(text('Connexion ou inscription impossible. Vérifiez vos identifiants et la confirmation de votre e-mail.', 'ما قدرناش ندخلوك ولا نكملو التسجيل. تأكد من المعلومات ومن تأكيد البريد ديالك.'));
       else if (signup) setMessage(text('Vérifiez votre messagerie et confirmez votre adresse avant de vous connecter.', 'شوف البريد ديالك وأكد العنوان قبل ما تدخل للحساب.'));
-    } catch { setMessage(text('Service indisponible. Réessayez.', 'الخدمة ما خداماش دابا. عاود المحاولة.')); }
+    } catch (failure) { setMessage(passwordSafetyMessage(failure) || text('Service indisponible. Réessayez.', 'الخدمة ما خداماش دابا. عاود المحاولة.')); }
     finally { setBusy(false); }
   };
   const resend = async () => {
@@ -115,12 +123,13 @@ export default function AccountPage() {
     if (password.length < 12 || password !== passwordConfirmation) { setMessage(text('Les deux mots de passe doivent être identiques et contenir au moins 12 caractères.', 'خاص كلمتي السر يكونو بحال بحال وفيهم 12 حرف على الأقل.')); return; }
     setBusy(true);
     try {
+      await requireSafePassword(password);
       const { error } = await supabase.auth.updateUser({ password });
       if (error) throw error;
       setPassword(''); setPasswordConfirmation(''); setRecovery(false);
       setMessage(text('Mot de passe modifié.', 'كلمة السر تبدلات.'));
       window.history.replaceState(null, '', window.location.pathname + window.location.search);
-    } catch { setMessage(text('Modification impossible. Demandez un nouveau lien de réinitialisation.', 'ما تبدلاتش كلمة السر. طلب رابط جديد.')); }
+    } catch (failure) { setMessage(passwordSafetyMessage(failure) || text('Modification impossible. Demandez un nouveau lien de réinitialisation.', 'ما تبدلاتش كلمة السر. طلب رابط جديد.')); }
     finally { setBusy(false); }
   };
   const statuses: Record<string, string> = ar
@@ -175,6 +184,7 @@ export default function AccountPage() {
           <div className="flex justify-between items-center gap-3"><h2 className="font-bold">{text('Mes dernières commandes','آخر الطلبات ديالي')}</h2><button onClick={()=>setRefresh(x=>x+1)} className="text-sm text-orange-700 font-semibold">{text('Actualiser','حدّث')}</button></div>
           {historyError ? <p role="alert" className="text-red-700">{text("Historique indisponible. Il ne s’agit pas d’un historique vide. Actualisez pour réessayer.","ما قدرناش نجيبو الطلبات. هاد الشي ما كيعنيش ما عندك حتى طلب. عاود حدّث الصفحة.")}</p> : !history.length ? <p className="text-sm text-slate-500">{text('Aucune commande récente pour ce compte dans ce restaurant.','ما كاين حتى طلب جديد لهاد الحساب فهاد المطعم.')}</p> : <ul className="space-y-2">{history.map(order=><li key={order.id} className="rounded-xl border p-3 flex justify-between gap-3 text-sm"><div><p className="font-mono text-xs break-all">{order.order_number}</p><p className="text-slate-500 mt-1">{new Date(order.created_at).toLocaleDateString(ar ? 'ar-MA' : 'fr-MA')} · {statuses[order.status] || text('En cours','كيتمعالج')}</p>{Number(order.points_redeemed)>0 && <p className="text-emerald-700 text-xs mt-1">{order.status === 'cancelled' ? text('Récompense annulée : points rendus','التخفيض تلغى والنقط رجعو') : <>{order.points_redeemed} {text('points utilisés · remise','نقطة مستعملة · تخفيض')} {Number(order.discount_amount).toFixed(2)} DH</>}</p>}</div><strong className="shrink-0">{Number(order.total).toFixed(2)} {text('DH','درهم')}</strong></li>)}</ul>}
         </>}
+        {(signup || recovery) && <p className="text-xs text-slate-500">{text('Vérification Have I Been Pwned à la validation : seul un préfixe de l’empreinte du mot de passe est transmis à ce service, jamais le mot de passe ni son empreinte complète.', 'ملي كتأكد، Have I Been Pwned كيتوصل غير بجزء صغير من بصمة كلمة السر، ماشي كلمة السر ولا البصمة كاملة.')}</p>}
         {message && <p role="status" className="rounded-xl bg-slate-100 p-3 text-sm">{message}</p>}
       </section>
     </div>
