@@ -41,4 +41,7 @@ assert.equal(acceptingOrders({is_active:true,is_open:false,schedule_enabled:true
 assert.equal(acceptingOrders({is_active:false,is_open:true,schedule_enabled:false}),false);checks++;
 assert.equal(acceptingOrders({is_active:true,is_open:true,schedule_enabled:false}),true);checks++;
 assert.equal(scheduleOpen(null),false);checks++;
+const {roundMoney}=await import('../src/lib/order-utils.mjs');
+assert.equal(roundMoney(0.1+0.2),0.3,'fractional product and option prices have canonical cents');checks++;
+assert.equal(roundMoney(0),0,'free order retains zero price');checks++;
 console.log(`${checks} client regression checks passed.`);

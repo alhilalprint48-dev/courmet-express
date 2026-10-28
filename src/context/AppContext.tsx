@@ -16,6 +16,7 @@ import { translations } from '@/lib/translations';
 import { RESTAURANT_INFO } from '@/data/mockData';
 import { supabase, supabaseUrl, supabaseAnonKey } from '@/lib/supabase';
 import { fetchRestaurantData } from '@/lib/restaurant-data.mjs';
+import { roundMoney } from '@/lib/order-utils.mjs';
 import { acceptingOrders, emptySchedule } from '@/lib/opening-hours.mjs';
 import { normalizePhone } from '@/lib/phone';
 
@@ -312,7 +313,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   ) => {
     if (!acceptingOrders(restaurant)) return;
     const optionsTotal = selectedOptions.reduce((acc, opt) => acc + opt.price, 0);
-    const unitPrice = product.price + optionsTotal;
+    const unitPrice = roundMoney(product.price + optionsTotal);
     const totalPrice = unitPrice * quantity;
     
     const optionsKey = selectedOptions
@@ -386,7 +387,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const payload = {
       restaurantId: restaurant.id, redeemPoints, mode, tableNumber: mode === 'dine_in' ? tableNumber : null,
       customer: { ...customer, phone: mode === 'dine_in' ? '' : normalizePhone(customer.phone) },
-      items: cart.map(item => ({ productId: item.product.id, quantity: item.quantity, expectedUnitPrice: item.unitPrice,
+      items: cart.map(item => ({ productId: item.product.id, quantity: item.quantity, expectedUnitPrice: roundMoney(item.unitPrice),
         options: item.selectedOptions.map(opt => ({ groupId: opt.groupId, optionId: opt.optionId })),
         specialInstructions: item.specialInstructions })),
     };
@@ -403,7 +404,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       mode: data.mode, tableNumber: data.table_number || undefined,
       discountAmount: Number(data.discount_amount || 0), pointsRedeemed: Number(data.points_redeemed || 0),
       subtotal: Number(data.subtotal), deliveryFee: Number(data.delivery_fee), total: Number(data.total),
-      customer: { ...customer, phone: data.customer_phone },
+      customer: { ...customer, phone: data.customer_phone, deliveryTimeSlot: data.delivery_timeslot || undefined },
       items: data.items.map((line: any, index: number) => ({
         cartItemId: data.id + '-' + index,
         product: { id: line.productId, name: line.name, price: Number(line.unitPrice),
