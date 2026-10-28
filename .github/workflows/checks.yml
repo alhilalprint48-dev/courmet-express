@@ -23,6 +23,7 @@ jobs:
       - run: npx tsc --noEmit
       - run: npm run test:security
       - run: npm run test:checkout
+      - run: npm run test:operations
       - run: npm run build
       - name: Verify Nginx configuration and response headers
         run: |

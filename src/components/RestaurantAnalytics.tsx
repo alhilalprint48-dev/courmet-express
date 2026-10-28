@@ -36,7 +36,7 @@ export function RestaurantAnalytics({ restaurantId, currency }: { restaurantId: 
       <h3 className="font-extrabold text-base">Chiffre d’affaires des commandes clôturées</h3>
       <button type="button" disabled={loading} onClick={() => setRevision(value => value + 1)} className="border rounded-xl px-4 py-2 text-xs font-bold disabled:opacity-50">Actualiser</button>
     </div>
-    <p className="text-xs text-slate-600">Commandes au statut « livré / terminé » uniquement, classées par date de création. Frais de livraison inclus. Jour, semaine depuis lundi et mois en cours selon l’heure du Maroc. Les commandes annulées ou en attente sont exclues du chiffre d’affaires. Ces montants ne constituent pas un rapprochement bancaire.</p>
+    <p className="text-xs text-slate-600">Commandes au statut « livré / terminé » uniquement, classées par date d’encaissement ; pour les anciennes commandes sans encaissement tracé, par date de création. Frais de livraison inclus. Jour, semaine depuis lundi et mois en cours selon l’heure du Maroc. Les commandes annulées ou en attente sont exclues du chiffre d’affaires. Ces montants ne constituent pas un rapprochement bancaire.</p>
     {loading && <p role="status">Chargement des commandes…</p>}
     {error && <p role="alert" className="text-red-700">{error}</p>}
     {data && <>
@@ -56,7 +56,7 @@ export function RestaurantAnalytics({ restaurantId, currency }: { restaurantId: 
           <tbody>{data.top_products.map(product => <tr key={`${product.product_id}:${product.name}`} className="border-t"><td className="py-2">{product.name}</td><td>{product.quantity}</td><td>{money(product.revenue)}</td></tr>)}</tbody>
         </table>}
       </div>
-      <p className="text-xs text-slate-500">Mis à jour le {new Date(data.generated_at).toLocaleString('fr-MA', { timeZone: 'Africa/Casablanca' })}. Les commandes supprimées ne figurent plus dans ces statistiques.</p>
+      <p className="text-xs text-slate-500">Mis à jour le {new Date(data.generated_at).toLocaleString('fr-MA', { timeZone: 'Africa/Casablanca' })}. L’archivage conserve le chiffre d’affaires et l’historique.</p>
     </>}
   </section>;
 }

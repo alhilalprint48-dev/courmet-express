@@ -72,7 +72,7 @@ export const ConsumptionModeModal: React.FC = () => {
     if (tempMode === 'dine_in') {
       setTableNumber(tempTable || 'Table 1');
     } else if (tempMode === 'delivery') {
-      setDeliveryAddress(tempAddress || "Casablanca centre");
+      setDeliveryAddress(tempAddress.trim());
     } else {
       setDeliveryTimeSlot(tempSlot);
     }

@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import React, { useState, useMemo } from 'react';
 import { useApp } from '@/context/AppContext';
 import { RestaurantInfo } from '@/components/RestaurantInfo';
@@ -16,9 +17,12 @@ import { RestaurantSuspendedScreen } from '@/components/RestaurantSuspendedScree
 import { Search, Flame, ShieldCheck, Clock, Bike } from 'lucide-react';
 
 export default function HomePage() {
-  const { language, t, restaurant, isRestaurantSuspended, products, isLoadingProducts } = useApp();
+  const { language, t, restaurant, isRestaurantSuspended, products, isLoadingProducts, restaurantError, reloadRestaurant } = useApp();
   const [activeCategory, setActiveCategory] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState<string>('');
+
+  if (isLoadingProducts) return <main className="min-h-screen grid place-items-center p-6"><p role="status">{language === 'ar' ? 'كنحملو المينيو…' : 'Chargement de la carte…'}</p></main>;
+  if (restaurantError) return <main className="min-h-screen grid place-items-center p-6"><div className="space-y-4 text-center"><h1 className="font-bold text-xl">{language === 'ar' ? 'المينيو ما متاحش دابا' : 'Carte indisponible'}</h1><p role="alert">{restaurantError}</p><button onClick={reloadRestaurant} className="bg-orange-600 text-white rounded-xl px-5 py-3">{language === 'ar' ? 'عاود المحاولة' : 'Réessayer'}</button><Link href="/" className="block underline">{language === 'ar' ? 'المينيو الرئيسي' : 'Ouvrir le menu principal'}</Link></div></main>;
 
   // If this restaurant has been suspended by the platform administrator
   if (isRestaurantSuspended) {
@@ -60,7 +64,7 @@ export default function HomePage() {
               <p className="text-gray-300 text-xs sm:text-sm mt-1 max-w-xl">
                 {language === 'ar'
                   ? 'برجر، بيتزا، وأطباق مميزة محضرة بعناية. بدون وسيط أو عمولات زائدة.'
-                  : 'Burgers gourmets, pizzas croustillantes et formules express livrés chez vous en moins de 35 min.'}
+                  : 'Découvrez la carte et commandez sur place, à emporter ou en livraison.'}
               </p>
             </div>
 
@@ -68,7 +72,7 @@ export default function HomePage() {
             <div className="grid grid-cols-3 gap-2 bg-white/5 border border-white/10 p-3 rounded-2xl backdrop-blur-sm shrink-0">
               <div className="text-center p-1">
                 <Clock className="w-4 h-4 text-amber-400 mx-auto mb-1" />
-                <span className="text-[10px] text-gray-300 block font-medium">~30 min</span>
+                <span className="text-[10px] text-gray-300 block font-medium">Délai à confirmer</span>
               </div>
               <div className="text-center p-1 border-x border-white/10">
                 <Bike className="w-4 h-4 text-primary-400 mx-auto mb-1" />
@@ -117,10 +121,10 @@ export default function HomePage() {
               <Search className="w-6 h-6" />
             </div>
             <h3 className="text-base font-bold text-gray-800">
-              {language === 'ar' ? 'لا توجد وجبات مطابقة للبحث' : 'Aucun produit trouvé'}
+              {products.length === 0 ? (language === 'ar' ? 'المينيو باقي ما تزادش' : 'La carte sera bientôt disponible') : (language === 'ar' ? 'لا توجد وجبات مطابقة للبحث' : 'Aucun produit trouvé')}
             </h3>
             <p className="text-xs text-gray-500 mt-1">
-              {language === 'ar' ? 'جرب البحث بكلمة أخرى' : 'Essayez avec un autre mot-clé ou catégorie.'}
+              {products.length === 0 ? (language === 'ar' ? 'تاصل بالمطعم للمعلومات.' : 'Contactez le restaurant pour plus d’informations.') : (language === 'ar' ? 'جرب البحث بكلمة أخرى' : 'Essayez avec un autre mot-clé ou catégorie.')}
             </p>
           </div>
         ) : (

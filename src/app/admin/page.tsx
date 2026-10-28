@@ -51,10 +51,12 @@ import {
   Layers
 } from 'lucide-react';
 import QRCode from 'qrcode';
+import { buildMenuUrl } from '@/lib/order-utils.mjs';
 import { useApp } from '@/context/AppContext';
 import { RESTAURANT_INFO, CATEGORIES } from '@/data/mockData';
 import { Product, ProductOptionGroup, ProductOption } from '@/types';
 import { RestaurantProfileSettings } from '@/components/RestaurantProfileSettings';
+import { OrderJournal } from '@/components/OrderJournal';
 import { RestaurantAnalytics } from '@/components/RestaurantAnalytics';
 import { normalizePhone } from '@/lib/phone';
 import { StaffAuthGate } from '@/components/StaffAuthGate';
@@ -128,7 +130,8 @@ function AdminPage() {
   };
 
   // QR Code Generation State
-  const [qrBaseUrl, setQrBaseUrl] = useState('http://localhost:3000');
+  const [qrBaseUrl, setQrBaseUrl] = useState('');
+  const [qrError, setQrError] = useState('');
   const [qrType, setQrType] = useState<'general' | 'table'>('table');
   const [tableNumber, setTableNumber] = useState('5');
   const [generatedQrDataUrl, setGeneratedQrDataUrl] = useState<string>('');
@@ -142,10 +145,10 @@ function AdminPage() {
 
   // Generate QR Code dynamically
   const generateQRCode = React.useCallback(async () => {
+    if (!qrBaseUrl || !restaurant.slug) return;
+    setQrError('');
     try {
-      const targetUrl = qrType === 'table' 
-        ? `${qrBaseUrl}/?table=${tableNumber}`
-        : qrBaseUrl;
+      const targetUrl = buildMenuUrl(qrBaseUrl, restaurant.slug, qrType === 'table' ? tableNumber : undefined);
 
       const dataUrl = await QRCode.toDataURL(targetUrl, {
         width: 320,
@@ -157,9 +160,10 @@ function AdminPage() {
       });
       setGeneratedQrDataUrl(dataUrl);
     } catch (err) {
-      console.error("QR Code generation error:", err);
+      setGeneratedQrDataUrl('');
+      setQrError('Adresse du site invalide : utilisez une URL https:// ou http:// valide.');
     }
-  }, [qrBaseUrl, qrType, tableNumber]);
+  }, [qrBaseUrl, qrType, tableNumber, restaurant.slug]);
 
   React.useEffect(() => {
     generateQRCode();
@@ -1250,6 +1254,7 @@ function AdminPage() {
 
               {/* Actions */}
               <div className="flex gap-2 pt-2">
+                {qrError && <p role="alert" className="text-red-700 text-sm">{qrError}</p>}
                 {generatedQrDataUrl && (
                   <a
                     href={generatedQrDataUrl}
@@ -1262,6 +1267,7 @@ function AdminPage() {
                 )}
                 <button
                   type="button"
+                  disabled={!generatedQrDataUrl}
                   onClick={() => window.print()}
                   className="bg-slate-900 hover:bg-slate-800 text-white font-bold py-2.5 px-3 rounded-xl text-xs flex items-center gap-1.5 transition-all"
                 >
@@ -1309,7 +1315,7 @@ function AdminPage() {
           </div>
         )}
 
-        {activeTab === 'analytics' && <RestaurantAnalytics key={restaurant.id} restaurantId={restaurant.id} currency={restaurant.currency} />}
+        {activeTab === 'analytics' && <div className="space-y-6"><RestaurantAnalytics key={restaurant.id} restaurantId={restaurant.id} currency={restaurant.currency} /><OrderJournal key={`journal-${restaurant.id}`} tenant={restaurant.id} /></div>}
       </main>
 
       {/* MODAL: Gestion des Options & Personnalisations du Plat (Sans SQL) */}
