@@ -54,6 +54,8 @@ import QRCode from 'qrcode';
 import { useApp } from '@/context/AppContext';
 import { RESTAURANT_INFO, CATEGORIES } from '@/data/mockData';
 import { Product, ProductOptionGroup, ProductOption } from '@/types';
+import { RestaurantAnalytics } from '@/components/RestaurantAnalytics';
+import { normalizePhone } from '@/lib/phone';
 import { StaffAuthGate } from '@/components/StaffAuthGate';
 import { compressAndResizeImage, MAX_IMAGE_SIZE_KB } from '@/lib/imageUtils';
 
@@ -61,6 +63,7 @@ function AdminPage() {
   const { 
     restaurant,
     updateCashLimit,
+    updateRestaurantSettings,
     categories, 
     addCategory, 
     deleteCategory, 
@@ -162,10 +165,31 @@ function AdminPage() {
   }, [generateQRCode]);
 
   // Settings State
-  const [deliveryFee, setDeliveryFee] = useState(RESTAURANT_INFO.deliveryFee);
-  const [minOrder, setMinOrder] = useState(RESTAURANT_INFO.minDeliveryAmount);
-  const [whatsapp, setWhatsapp] = useState(RESTAURANT_INFO.whatsappNumber);
+  const [deliveryFee, setDeliveryFee] = useState(restaurant.delivery_fee);
+  const [minOrder, setMinOrder] = useState(restaurant.min_delivery_amount);
+  const [whatsapp, setWhatsapp] = useState(restaurant.whatsapp_number);
   const [settingsSaved, setSettingsSaved] = useState(false);
+  const [settingsSaving, setSettingsSaving] = useState(false);
+  const [settingsError, setSettingsError] = useState('');
+  React.useEffect(() => {
+    setDeliveryFee(restaurant.delivery_fee);
+    setMinOrder(restaurant.min_delivery_amount);
+    setWhatsapp(restaurant.whatsapp_number);
+  }, [restaurant.id, restaurant.delivery_fee, restaurant.min_delivery_amount, restaurant.whatsapp_number]);
+  const saveSettings = async () => {
+    setSettingsSaving(true);
+    setSettingsSaved(false);
+    setSettingsError('');
+    try {
+      if ([deliveryFee, minOrder].some(value => !Number.isFinite(value) || value < 0 || value > 100000 || Math.abs(value * 100 - Math.round(value * 100)) > 0.000001)) {
+        throw new Error('Saisissez des montants entre 0 et 100 000 DH, avec deux décimales maximum.');
+      }
+      await updateRestaurantSettings(deliveryFee, minOrder, normalizePhone(whatsapp).slice(1));
+      setSettingsSaved(true);
+    } catch (error) {
+      setSettingsError(error instanceof Error ? error.message : 'Enregistrement refusé.');
+    } finally { setSettingsSaving(false); }
+  };
 
   // Anti-fraud State
   const [maxCodLimit, setMaxCodLimit] = useState(restaurant.max_cash_amount);
@@ -1001,7 +1025,8 @@ function AdminPage() {
                 <input
                   type="number"
                   value={deliveryFee}
-                  onChange={(e) => setDeliveryFee(Number(e.target.value))}
+                  min="0" max="100000" step="0.01"
+                  onChange={(e) => { setDeliveryFee(Number(e.target.value)); setSettingsSaved(false); }}
                   className="w-full p-2.5 text-sm border rounded-xl"
                 />
                 <p className="text-[11px] text-slate-400 mt-1">Appliqué automatiquement lors du calcul du panier.</p>
@@ -1014,7 +1039,8 @@ function AdminPage() {
                 <input
                   type="number"
                   value={minOrder}
-                  onChange={(e) => setMinOrder(Number(e.target.value))}
+                  min="0" max="100000" step="0.01"
+                  onChange={(e) => { setMinOrder(Number(e.target.value)); setSettingsSaved(false); }}
                   className="w-full p-2.5 text-sm border rounded-xl"
                 />
               </div>
@@ -1026,7 +1052,7 @@ function AdminPage() {
                 <input
                   type="text"
                   value={whatsapp}
-                  onChange={(e) => setWhatsapp(e.target.value)}
+                  onChange={(e) => { setWhatsapp(e.target.value); setSettingsSaved(false); }}
                   placeholder="212600000000"
                   className="w-full p-2.5 text-sm border rounded-xl font-mono"
                 />
@@ -1035,6 +1061,7 @@ function AdminPage() {
 
               <p className="text-sm">Chaque membre utilise un compte personnel Supabase Auth. Les droits par restaurant sont attribués par le responsable de la plateforme.</p>
 
+              {settingsError && <p role="alert" className="text-xs text-red-700">{settingsError}</p>}
               {settingsSaved && (
                 <div className="p-3 bg-emerald-50 text-emerald-700 rounded-xl text-xs font-bold flex items-center gap-2">
                   <Check className="w-4 h-4" />
@@ -1044,14 +1071,12 @@ function AdminPage() {
 
               <button
                 type="button"
-                onClick={() => {
-                  setSettingsSaved(true);
-                  setTimeout(() => setSettingsSaved(false), 3000);
-                }}
+                onClick={saveSettings}
+                disabled={settingsSaving}
                 className="w-full bg-orange-600 hover:bg-orange-700 text-white font-black py-3 rounded-xl text-xs shadow-md shadow-orange-600/30 flex items-center justify-center gap-2"
               >
                 <Save className="w-4 h-4" />
-                <span>Enregistrer les Paramètres du Restaurant</span>
+                <span>{settingsSaving ? 'Enregistrement…' : 'Enregistrer les Paramètres du Restaurant'}</span>
               </button>
             </div>
           </div>
@@ -1280,124 +1305,7 @@ function AdminPage() {
           </div>
         )}
 
-        {/* TAB 5: ANALYTICS & CAISSE CLOSING */}
-        {activeTab === 'analytics' && (
-          <div className="space-y-6 max-w-5xl">
-            {/* Financial Cards Grid */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-              <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
-                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
-                  Chiffre d&apos;Affaires Réalisé
-                </span>
-                <span className="text-2xl font-black text-slate-900 block">
-                  16 840 <span className="text-xs font-bold text-emerald-600">DH</span>
-                </span>
-                <span className="text-[10px] text-emerald-600 font-bold mt-1 block">
-                  +18% vs mois précédent
-                </span>
-              </div>
-
-              <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
-                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
-                  Commandes Validées
-                </span>
-                <span className="text-2xl font-black text-slate-900 block">
-                  112
-                </span>
-                <span className="text-[10px] text-slate-400 font-medium mt-1 block">
-                  0 commande refusée
-                </span>
-              </div>
-
-              <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
-                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
-                  Ticket Moyen
-                </span>
-                <span className="text-2xl font-black text-slate-900 block">
-                  150.35 <span className="text-xs font-bold text-slate-400">DH</span>
-                </span>
-                <span className="text-[10px] text-slate-400 font-medium mt-1 block">
-                  ~2.3 plats par commande
-                </span>
-              </div>
-
-              <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
-                <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1">
-                  Économies Réalisées
-                </span>
-                <span className="text-2xl font-black text-emerald-600 block">
-                  +5 052 <span className="text-xs font-bold text-emerald-700">DH</span>
-                </span>
-                <span className="text-[10px] text-emerald-700 font-bold mt-1 block">
-                  Gain net sans commission
-                </span>
-              </div>
-            </div>
-
-            {/* Breakdown Sections */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {/* Payment Methods */}
-              <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
-                <h4 className="font-extrabold text-sm text-slate-900 flex items-center justify-between">
-                  <span>Répartition des Encaissements</span>
-                  <Receipt className="w-4 h-4 text-slate-400" />
-                </h4>
-
-                <div className="space-y-3 text-xs">
-                  <div>
-                    <div className="flex justify-between font-bold mb-1">
-                      <span className="text-slate-700">Espèces (Cash à la livraison)</span>
-                      <span className="text-slate-900 font-black">11 450 DH (68%)</span>
-                    </div>
-                    <div className="w-full h-2 rounded-full bg-slate-100 overflow-hidden">
-                      <div className="h-full bg-emerald-500 rounded-full" style={{ width: '68%' }} />
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="flex justify-between font-bold mb-1">
-                      <span className="text-slate-700">Carte Bancaire sur TPE mobile</span>
-                      <span className="text-slate-900 font-black">5 390 DH (32%)</span>
-                    </div>
-                    <div className="w-full h-2 rounded-full bg-slate-100 overflow-hidden">
-                      <div className="h-full bg-blue-500 rounded-full" style={{ width: '32%' }} />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Channels Breakdown */}
-              <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-xs space-y-4">
-                <h4 className="font-extrabold text-sm text-slate-900 flex items-center justify-between">
-                  <span>Répartition par Canal</span>
-                  <BarChart3 className="w-4 h-4 text-slate-400" />
-                </h4>
-
-                <div className="space-y-3 text-xs">
-                  <div>
-                    <div className="flex justify-between font-bold mb-1">
-                      <span className="text-slate-700">Livraison à domicile</span>
-                      <span className="text-slate-900 font-black">83 commandes (74%)</span>
-                    </div>
-                    <div className="w-full h-2 rounded-full bg-slate-100 overflow-hidden">
-                      <div className="h-full bg-orange-500 rounded-full" style={{ width: '74%' }} />
-                    </div>
-                  </div>
-
-                  <div>
-                    <div className="flex justify-between font-bold mb-1">
-                      <span className="text-slate-700">À emporter & QR Code en salle</span>
-                      <span className="text-slate-900 font-black">29 commandes (26%)</span>
-                    </div>
-                    <div className="w-full h-2 rounded-full bg-slate-100 overflow-hidden">
-                      <div className="h-full bg-amber-500 rounded-full" style={{ width: '26%' }} />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
+        {activeTab === 'analytics' && <RestaurantAnalytics key={restaurant.id} restaurantId={restaurant.id} currency={restaurant.currency} />}
       </main>
 
       {/* MODAL: Gestion des Options & Personnalisations du Plat (Sans SQL) */}

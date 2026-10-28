@@ -43,6 +43,7 @@ interface AppContextType {
   availableRestaurants: { id: string; slug: string; name: string }[];
   switchRestaurant: (slug: string) => void;
   updateCashLimit: (amount: number) => Promise<void>;
+  updateRestaurantSettings: (fee: number, minimum: number, whatsapp: string) => Promise<void>;
   isRestaurantSuspended: boolean;
 
   // Categories & Products from Supabase
@@ -214,8 +215,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         whatsapp_number: restoData.whatsapp_number || RESTAURANT_INFO.whatsappNumber,
         address: restoData.address || RESTAURANT_INFO.address,
         currency: restoData.currency || 'DH',
-        delivery_fee: Number(restoData.delivery_fee) || 15,
-        min_delivery_amount: Number(restoData.min_delivery_amount) || 50,
+        delivery_fee: Number(restoData.delivery_fee ?? 15),
+        min_delivery_amount: Number(restoData.min_delivery_amount ?? 50),
         max_cash_amount: Number(restoData.max_cash_amount ?? 500),
         is_active: restoData.is_active,
       });
@@ -475,6 +476,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setCategories(prev => prev.filter(c => c.id !== categoryId));
   };
 
+  const updateRestaurantSettings = async (fee: number, minimum: number, whatsapp: string) => {
+    const tenant = restaurant.id;
+    const { data, error } = await supabase.rpc('update_restaurant_settings', { tenant, fee, minimum, whatsapp });
+    if (error || !data) throw new Error('Enregistrement refusé. Vérifiez les montants et le numéro WhatsApp.');
+    setRestaurant(prev => prev.id === tenant ? { ...prev, delivery_fee: Number(data.delivery_fee),
+      min_delivery_amount: Number(data.min_delivery_amount), whatsapp_number: data.whatsapp_number } : prev);
+  };
+
   const updateCashLimit = async (amount: number) => {
     const { data, error } = await supabase.rpc('update_cash_limit', { tenant: restaurant.id, amount });
     if (error || data == null) throw new Error('Enregistrement du plafond refusé.');
@@ -492,6 +501,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         availableRestaurants,
         switchRestaurant,
         updateCashLimit,
+        updateRestaurantSettings,
         isRestaurantSuspended: !restaurant.is_active,
         categories,
         setCategories,
