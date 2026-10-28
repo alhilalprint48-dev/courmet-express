@@ -22,9 +22,9 @@ export function RestaurantProfileSettings() {
   const toggle = async () => {
     setToggling(true); setFeedback(''); setError('');
     try {
-      const accepting = !restaurant.is_open;
+      const accepting = !restaurant.manual_open;
       await updateRestaurantAvailability(accepting);
-      setFeedback(accepting ? 'Les nouvelles commandes sont ouvertes.' : 'Les nouvelles commandes sont fermées. Les commandes existantes restent à traiter.');
+      setFeedback(accepting ? 'Autorisation manuelle activée. Les horaires automatiques restent applicables.' : 'Les nouvelles commandes sont fermées. Les commandes existantes restent à traiter.');
     } catch (failure) { setError(failure instanceof Error ? failure.message : 'Modification refusée.'); }
     finally { setToggling(false); }
   };
@@ -40,9 +40,9 @@ export function RestaurantProfileSettings() {
     <h3 className="font-extrabold text-base">Ouverture et informations du restaurant</h3>
     <div className={`rounded-xl p-4 space-y-3 ${restaurant.is_open ? 'bg-emerald-50' : 'bg-amber-50'}`}>
       <p className="font-bold" role="status">{restaurant.is_open ? 'Ouvert — commandes acceptées' : 'Fermé — nouvelles commandes bloquées'}</p>
-      <button type="button" role="switch" aria-checked={restaurant.is_open} aria-label="Accepter les nouvelles commandes" disabled={toggling || !restaurant.is_active}
+      <button type="button" role="switch" aria-checked={restaurant.manual_open} aria-label="Accepter les nouvelles commandes" disabled={toggling || !restaurant.is_active}
         onClick={toggle} className="bg-slate-900 text-white rounded-xl px-4 py-2 text-sm font-bold disabled:opacity-50">
-        {toggling ? 'Mise à jour…' : restaurant.is_open ? 'Fermer les commandes maintenant' : 'Ouvrir les commandes maintenant'}
+        {toggling ? 'Mise à jour…' : restaurant.manual_open ? 'Suspendre manuellement les commandes' : 'Autoriser les commandes selon les horaires'}
       </button>
       <p className="text-xs">Le menu reste visible pendant la fermeture. Le suivi des commandes existantes reste disponible.</p>
       {!restaurant.is_active && <p className="text-xs text-red-700">Restaurant suspendu : contactez le responsable de la plateforme.</p>}
@@ -52,7 +52,7 @@ export function RestaurantProfileSettings() {
       <label className="block text-xs font-bold">Adresse<textarea required maxLength={1000} value={address} onChange={event => setAddress(event.target.value)} className="block w-full mt-1 border rounded-xl p-2.5 text-sm" /></label>
       <label className="block text-xs font-bold">Téléphone<input required type="tel" maxLength={32} value={phone} onChange={event => setPhone(event.target.value)} className="block w-full mt-1 border rounded-xl p-2.5 text-sm" /></label>
       <label className="block text-xs font-bold">Horaires affichés aux clients<input required maxLength={128} value={hours} placeholder="Lun–sam : 11:30–23:30 ; dimanche fermé" onChange={event => setHours(event.target.value)} className="block w-full mt-1 border rounded-xl p-2.5 text-sm" /></label>
-      <p className="text-xs text-slate-600">Les horaires sont informatifs. L’interrupteur ci-dessus pilote la prise de commandes ; aucune fermeture automatique n’est programmée.</p>
+      <p className="text-xs text-slate-600">Ce texte est utilisé en mode manuel. Si les horaires automatiques sont activés ci-dessous, leurs plages sont affichées aux clients et contrôlées par le serveur.</p>
       <label className="block text-xs font-bold">Message de fermeture (facultatif)<textarea maxLength={300} value={closedMessage} placeholder="Ex. : Nous rouvrons à 18 h." onChange={event => setClosedMessage(event.target.value)} className="block w-full mt-1 border rounded-xl p-2.5 text-sm" /></label>
       <button type="submit" disabled={saving} className="bg-orange-600 text-white rounded-xl px-4 py-3 text-xs font-bold disabled:opacity-50">{saving ? 'Enregistrement…' : 'Enregistrer les informations du restaurant'}</button>
     </form>

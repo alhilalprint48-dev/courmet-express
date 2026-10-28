@@ -57,6 +57,8 @@ import { RESTAURANT_INFO, CATEGORIES } from '@/data/mockData';
 import { Product, ProductOptionGroup, ProductOption } from '@/types';
 import { RestaurantProfileSettings } from '@/components/RestaurantProfileSettings';
 import { OrderJournal } from '@/components/OrderJournal';
+import { ProductEditor } from '@/components/ProductEditor';
+import { OpeningScheduleSettings } from '@/components/OpeningScheduleSettings';
 import { RestaurantAnalytics } from '@/components/RestaurantAnalytics';
 import { normalizePhone } from '@/lib/phone';
 import { StaffAuthGate } from '@/components/StaffAuthGate';
@@ -79,6 +81,7 @@ function AdminPage() {
     addToBlacklist,
     removeFromBlacklist
   } = useApp();
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [activeTab, setActiveTab] = useState<'catalog' | 'settings' | 'antifraud' | 'qrcodes' | 'analytics'>('catalog');
   const [search, setSearch] = useState('');
 
@@ -973,8 +976,9 @@ function AdminPage() {
                       </div>
                     </div>
 
-                    {/* Right: Rupture Immédiate (1 clic) button, Options & Delete */}
+                    {/* Product editing, availability and options */}
                     <div className="flex items-center gap-2 self-end sm:self-center">
+                      <button type="button" onClick={() => setEditingProduct(product)} className="p-2 border rounded-xl text-sm font-bold text-orange-700">Modifier le plat</button>
                       <button
                         type="button"
                         onClick={() => {
@@ -1020,7 +1024,7 @@ function AdminPage() {
         {/* TAB 2: SETTINGS & DELIVERY ZONES */}
         {activeTab === 'settings' && (
           <div className="space-y-6">
-          <RestaurantProfileSettings key={restaurant.id} />
+          <RestaurantProfileSettings key={restaurant.id} /><OpeningScheduleSettings key={`schedule-${restaurant.id}`} />
           <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs max-w-xl space-y-5">
             <h3 className="font-extrabold text-base text-slate-900">Paramètres Généraux & Livraison</h3>
 
@@ -1319,6 +1323,7 @@ function AdminPage() {
       </main>
 
       {/* MODAL: Gestion des Options & Personnalisations du Plat (Sans SQL) */}
+      {editingProduct && <ProductEditor key={editingProduct.id} product={editingProduct} close={() => setEditingProduct(null)} />}
       {editingProductOptions && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto animate-fade-in">
           <div className="bg-white rounded-3xl max-w-lg w-full max-h-[90vh] overflow-y-auto p-6 space-y-4 shadow-2xl border border-slate-200">

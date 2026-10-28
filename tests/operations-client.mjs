@@ -23,4 +23,25 @@ const empty=await fetchRestaurantData(fake({restaurants:[{data:restaurant},{data
 eq('empty real menu remains empty without demo products',[empty.products,empty.categories],[[],[]]);
 await assert.rejects(()=>fetchRestaurantData(fake({restaurants:[{data:null,error:{message:'not found'}},{data:[]}]}),'unknown'),/introuvable/);checks++;
 await assert.rejects(()=>fetchRestaurantData(fake({restaurants:[{data:restaurant},{data:[restaurant]}],products:{data:null,error:{message:'network'}},categories:{data:[]}}),'b'),/chargée/);checks++;
+
+
+const {scheduleOpen,acceptingOrders,emptySchedule}=await import('../src/lib/opening-hours.mjs');
+const weekly=emptySchedule();weekly[1]=[{start:'11:30',end:'14:00'},{start:'19:00',end:'02:00'}];
+for(const [label,moment,expected] of [
+ ['opens at exact start','2026-10-26T11:30:00Z',true],
+ ['closed at lunch end','2026-10-26T14:00:00Z',false],
+ ['closed between services','2026-10-26T16:00:00Z',false],
+ ['overnight carries into Tuesday','2026-10-27T01:30:00Z',true],
+ ['overnight closes at exact end','2026-10-27T02:00:00Z',false],
+ ['closed Sunday','2026-10-25T12:00:00Z',false],
+ ['summer follows Casablanca time zone','2026-07-06T10:30:00Z',true],
+ ['Ramadan follows Casablanca time zone','2026-02-23T11:00:00Z',false],
+ ]){assert.equal(scheduleOpen(weekly,new Date(moment)),expected,label);checks++;console.log('PASS',label);}
+assert.equal(acceptingOrders({is_active:true,is_open:false,schedule_enabled:true,weekly_schedule:weekly},new Date('2026-10-26T11:00:00Z')),false);checks++;
+assert.equal(acceptingOrders({is_active:false,is_open:true,schedule_enabled:false}),false);checks++;
+assert.equal(acceptingOrders({is_active:true,is_open:true,schedule_enabled:false}),true);checks++;
+assert.equal(scheduleOpen(null),false);checks++;
+const {roundMoney}=await import('../src/lib/order-utils.mjs');
+assert.equal(roundMoney(0.1+0.2),0.3,'fractional product and option prices have canonical cents');checks++;
+assert.equal(roundMoney(0),0,'free order retains zero price');checks++;
 console.log(`${checks} client regression checks passed.`);

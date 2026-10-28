@@ -268,14 +268,3 @@ export const PRODUCTS: Product[] = [
     isAvailable: false, // Épuisé pour tester l'état rupture
   }
 ];
-
-export const TIME_SLOTS = [
-  "Au plus vite (~25-35 min)",
-  "12:15 - 12:45",
-  "13:00 - 13:30",
-  "13:45 - 14:15",
-  "19:30 - 20:00",
-  "20:15 - 20:45",
-  "21:00 - 21:30",
-  "21:45 - 22:15",
-];

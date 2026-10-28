@@ -13,7 +13,7 @@ import {
   UtensilsCrossed,
   Sparkles
 } from 'lucide-react';
-import { TIME_SLOTS } from '@/data/mockData';
+
 
 export const ConsumptionModeModal: React.FC = () => {
   const { 
@@ -35,7 +35,7 @@ export const ConsumptionModeModal: React.FC = () => {
   const [tempMode, setTempMode] = useState(mode);
   const [tempTable, setTempTable] = useState(tableNumber || 'Table 1');
   const [tempAddress, setTempAddress] = useState(deliveryAddress);
-  const [tempSlot, setTempSlot] = useState(deliveryTimeSlot);
+  const tempSlot = 'Au plus vite — délai à confirmer par le restaurant';
   const [isLocating, setIsLocating] = useState(false);
   const [locSuccess, setLocSuccess] = useState(false);
 
@@ -269,17 +269,8 @@ export const ConsumptionModeModal: React.FC = () => {
                 <Clock className="w-3.5 h-3.5 text-orange-600" />
                 {t.modeSelection.selectTimeslot}
               </label>
-              <select
-                value={tempSlot}
-                onChange={(e) => setTempSlot(e.target.value)}
-                className="w-full px-3 py-2.5 rounded-xl border border-gray-300 text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-orange-500 bg-white font-medium"
-              >
-                {TIME_SLOTS.map((slot) => (
-                  <option key={slot} value={slot}>
-                    {slot}
-                  </option>
-                ))}
-              </select>
+              <p className="text-sm font-bold">{t.modeSelection.asap}</p>
+              <p className="text-xs text-slate-600">{t.modeSelection.pickupNotice}</p>
               <p className="text-[11px] text-gray-400 text-center">
                 Adresse de retrait : {restaurant.address}
               </p>
