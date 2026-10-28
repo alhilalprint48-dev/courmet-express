@@ -57,7 +57,7 @@ function DeliveryPage() {
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
             <Link
-              href="/"
+              href={`/?r=${encodeURIComponent(restaurant.slug)}`}
               className="p-2 rounded-xl bg-slate-700 hover:bg-slate-600 text-slate-200 transition-colors"
             >
               <ArrowLeft className="w-4 h-4" />

@@ -149,9 +149,9 @@ export default function AccountPage() {
           {role && <div className="rounded-2xl bg-slate-950 p-4 text-white space-y-3">
             <h2 className="font-bold">{text('Espace du personnel','فضاء العاملين')}</h2>
             <div className="grid sm:grid-cols-3 gap-2">
-              {manager && <Link href="/admin" className="flex items-center gap-2 bg-orange-600 rounded-xl p-3 text-sm font-bold"><Settings size={17}/>{text('Administration','الإدارة')}</Link>}
-              {(manager || role==='kds') && <Link href="/kds" className="flex items-center gap-2 bg-slate-800 rounded-xl p-3 text-sm font-bold"><ChefHat size={17}/>{text('Cuisine','المطبخ')}</Link>}
-              {(manager || role==='livreur') && <Link href="/livreur" className="flex items-center gap-2 bg-slate-800 rounded-xl p-3 text-sm font-bold"><Bike size={17}/>{text('Livraison','التوصيل')}</Link>}
+              {manager && <Link href={`/admin?r=${encodeURIComponent(restaurant.slug)}`} className="flex items-center gap-2 bg-orange-600 rounded-xl p-3 text-sm font-bold"><Settings size={17}/>{text('Administration','الإدارة')}</Link>}
+              {(manager || role==='kds') && <Link href={`/kds?r=${encodeURIComponent(restaurant.slug)}`} className="flex items-center gap-2 bg-slate-800 rounded-xl p-3 text-sm font-bold"><ChefHat size={17}/>{text('Cuisine','المطبخ')}</Link>}
+              {(manager || role==='livreur') && <Link href={`/livreur?r=${encodeURIComponent(restaurant.slug)}`} className="flex items-center gap-2 bg-slate-800 rounded-xl p-3 text-sm font-bold"><Bike size={17}/>{text('Livraison','التوصيل')}</Link>}
             </div>
             {role==='superadmin' && <Link className="text-sm underline block" href="/super-admin">{text('Gestion des établissements','تسيير المطاعم')}</Link>}
           </div>}

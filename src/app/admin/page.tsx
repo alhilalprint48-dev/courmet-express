@@ -388,7 +388,7 @@ function AdminPage() {
         <div className="max-w-5xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <Link
-              href="/"
+              href={`/?r=${encodeURIComponent(restaurant.slug)}`}
               className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors"
             >
               <ArrowLeft className="w-4 h-4" />
@@ -404,13 +404,13 @@ function AdminPage() {
 
           <div className="flex items-center gap-2">
             <Link
-              href="/kds"
+              href={`/kds?r=${encodeURIComponent(restaurant.slug)}`}
               className="px-3 py-1.5 rounded-xl bg-slate-900 text-white text-xs font-bold hover:bg-slate-800 transition-colors"
             >
               Écran KDS
             </Link>
             <Link
-              href="/livreur"
+              href={`/livreur?r=${encodeURIComponent(restaurant.slug)}`}
               className="px-3 py-1.5 rounded-xl bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-700 transition-colors"
             >
               App Livreur
