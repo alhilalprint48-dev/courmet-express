@@ -2,6 +2,7 @@
 
 import React, { useState, useMemo } from 'react';
 import { useApp } from '@/context/AppContext';
+import { RestaurantInfo } from '@/components/RestaurantInfo';
 import { Header } from '@/components/Header';
 import { ConsumptionModeModal } from '@/components/ConsumptionModeModal';
 import { CategoryNav } from '@/components/CategoryNav';
@@ -42,6 +43,7 @@ export default function HomePage() {
     <div className="min-h-screen flex flex-col pb-24 sm:pb-12 bg-slate-50 w-full max-w-full overflow-x-hidden">
       {/* Universal Header */}
       <Header />
+      <RestaurantInfo />
 
       {/* Hero / Promo Banner */}
       <section className="bg-gradient-to-br from-dark-900 via-dark-800 to-primary-950 text-white px-3 sm:px-4 py-5 sm:py-8 shadow-inner w-full max-w-full overflow-hidden">
@@ -131,7 +133,7 @@ export default function HomePage() {
       </main>
 
       {/* Modals & Drawers */}
-      <ConsumptionModeModal />
+      {restaurant.is_open && <ConsumptionModeModal />}
       <ProductModal />
       <CheckoutModal />
       <OrderSuccessModal />

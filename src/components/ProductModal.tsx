@@ -7,7 +7,7 @@ import { X, Plus, Minus, Check, MessageSquare } from 'lucide-react';
 import Image from 'next/image';
 
 export const ProductModal: React.FC = () => {
-  const { selectedProductForModal, closeProductModal, addToCart, language, t } = useApp();
+  const { restaurant, selectedProductForModal, closeProductModal, addToCart, language, t } = useApp();
 
   const [quantity, setQuantity] = useState(1);
   const [selectedOptions, setSelectedOptions] = useState<SelectedOptionChoice[]>([]);
@@ -249,6 +249,7 @@ export const ProductModal: React.FC = () => {
 
           {/* Add Button */}
           <button
+            disabled={!restaurant.is_open}
             onClick={handleAddToCart}
             className="flex-1 bg-primary-600 hover:bg-primary-700 text-white font-extrabold py-3.5 px-4 rounded-2xl shadow-lg shadow-primary-600/25 flex items-center justify-between text-sm transition-all active:scale-[0.99]"
           >

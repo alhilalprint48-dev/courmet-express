@@ -54,6 +54,7 @@ import QRCode from 'qrcode';
 import { useApp } from '@/context/AppContext';
 import { RESTAURANT_INFO, CATEGORIES } from '@/data/mockData';
 import { Product, ProductOptionGroup, ProductOption } from '@/types';
+import { RestaurantProfileSettings } from '@/components/RestaurantProfileSettings';
 import { RestaurantAnalytics } from '@/components/RestaurantAnalytics';
 import { normalizePhone } from '@/lib/phone';
 import { StaffAuthGate } from '@/components/StaffAuthGate';
@@ -1014,6 +1015,8 @@ function AdminPage() {
 
         {/* TAB 2: SETTINGS & DELIVERY ZONES */}
         {activeTab === 'settings' && (
+          <div className="space-y-6">
+          <RestaurantProfileSettings key={restaurant.id} />
           <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-xs max-w-xl space-y-5">
             <h3 className="font-extrabold text-base text-slate-900">Paramètres Généraux & Livraison</h3>
 
@@ -1079,6 +1082,7 @@ function AdminPage() {
                 <span>{settingsSaving ? 'Enregistrement…' : 'Enregistrer les Paramètres du Restaurant'}</span>
               </button>
             </div>
+          </div>
           </div>
         )}
 
@@ -1271,7 +1275,7 @@ function AdminPage() {
             <div className="flex flex-col items-center justify-center p-6 bg-gradient-to-b from-orange-50/50 to-white rounded-3xl border-2 border-dashed border-orange-200 text-center shadow-xs">
               <div className="bg-white p-6 rounded-2xl shadow-xl border border-slate-100 max-w-xs w-full flex flex-col items-center space-y-3">
                 <span className="font-extrabold text-sm text-slate-900 uppercase tracking-widest">
-                  {RESTAURANT_INFO.name}
+                  {restaurant.name}
                 </span>
 
                 {qrType === 'table' ? (

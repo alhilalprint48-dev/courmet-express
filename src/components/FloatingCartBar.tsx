@@ -5,13 +5,14 @@ import { useApp } from '@/context/AppContext';
 import { ShoppingBag, ArrowRight, ArrowLeft } from 'lucide-react';
 
 export const FloatingCartBar: React.FC = () => {
-  const { totalItemCount, total, setIsCheckoutOpen, isRtl, t } = useApp();
+  const { restaurant, language, totalItemCount, total, setIsCheckoutOpen, isRtl, t } = useApp();
 
   if (totalItemCount === 0) return null;
 
   return (
     <div className="fixed bottom-4 left-4 right-4 z-20 max-w-lg mx-auto sm:hidden animate-slide-up">
       <button
+        disabled={!restaurant.is_open}
         onClick={() => setIsCheckoutOpen(true)}
         className="w-full bg-primary-600 hover:bg-primary-700 text-white rounded-2xl p-4 shadow-xl shadow-primary-600/40 flex items-center justify-between font-bold text-sm transition-all active:scale-[0.98]"
       >
@@ -31,7 +32,7 @@ export const FloatingCartBar: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-1.5 bg-white/20 px-3 py-1.5 rounded-xl text-xs font-black">
-          <span>{t.cart.checkout}</span>
+          <span>{restaurant.is_open ? t.cart.checkout : language === 'ar' ? 'المطعم مسدود' : 'Restaurant fermé'}</span>
           {isRtl ? <ArrowLeft className="w-4 h-4" /> : <ArrowRight className="w-4 h-4" />}
         </div>
       </button>
